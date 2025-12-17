@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Membership Proof - Privacy-Preserving Verification</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --success: #16a34a;
+      --error: #dc2626;
+      --warning: #d97706;
+      --bg: #f8fafc;
+      --card-bg: #ffffff;
+      --text: #1e293b;
+      --text-muted: #64748b;
+      --border: #e2e8f0;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: 2px solid var(--border);
+      background: var(--card-bg);
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .tab:hover {
+      border-color: var(--primary);
+    }
+
+    .tab.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem;
+    }
+
+    label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .hint {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 0.25rem;
+    }
+
+    input[type="text"],
+    input[type="password"],
+    input[type="date"],
+    input[type="file"],
+    textarea {
+      width: 100%;
+      padding: 0.75rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+
+    input:focus,
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+    }
+
+    textarea {
+      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+      font-size: 0.85rem;
+      resize: vertical;
+    }
+
+    button {
+      padding: 0.75rem 1.5rem;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      width: 100%;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--primary-dark);
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      background: var(--bg);
+      color: var(--text);
+      border: 2px solid var(--border);
+    }
+
+    .btn-secondary:hover {
+      border-color: var(--primary);
+    }
+
+    .output-group {
+      margin-bottom: 1rem;
+    }
+
+    .output-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+
+    .output-header label {
+      margin-bottom: 0;
+    }
+
+    .success {
+      background: #dcfce7;
+      border: 1px solid #86efac;
+      color: #166534;
+      padding: 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+
+    .success p {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #991b1b;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+
+    .result {
+      padding: 1.5rem;
+      border-radius: 8px;
+      text-align: center;
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-top: 1rem;
+    }
+
+    .result.valid {
+      background: #dcfce7;
+      border: 2px solid var(--success);
+      color: var(--success);
+    }
+
+    .result.invalid {
+      background: #fef2f2;
+      border: 2px solid var(--error);
+      color: var(--error);
+    }
+
+    .result.error {
+      background: #fef3c7;
+      border: 2px solid var(--warning);
+      color: var(--warning);
+      font-size: 1rem;
+    }
+
+    .privacy-note {
+      margin-top: 2rem;
+      padding: 1rem;
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: #0369a1;
+    }
+
+    .privacy-note strong {
+      display: block;
+      margin-bottom: 0.25rem;
+    }
+
+    footer {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+
+    footer a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      padding: 2rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--bg);
+    }
+
+    .drop-zone:hover {
+      border-color: var(--primary);
+      background: #f0f9ff;
+    }
+
+    .drop-zone.drag-over {
+      border-color: var(--primary);
+      background: #dbeafe;
+      border-style: solid;
+    }
+
+    .drop-zone.has-file {
+      border-color: var(--success);
+      background: #dcfce7;
+    }
+
+    .drop-zone-icon {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .drop-zone-text {
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
+    .drop-zone-text strong {
+      color: var(--primary);
+    }
+
+    .drop-zone-filename {
+      margin-top: 0.5rem;
+      font-weight: 500;
+      color: var(--success);
+    }
+
+    .drop-zone input[type="file"] {
+      display: none;
+    }
+
+    @media (max-width: 480px) {
+      .container {
+        padding: 1rem;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      .card {
+        padding: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Membership Proof</h1>
+      <p class="subtitle">Privacy-preserving membership verification</p>
+    </header>
+
+    <div class="tabs">
+      <button class="tab active" id="tab-generate">Generate Codes</button>
+      <button class="tab" id="tab-verify">Verify Member</button>
+    </div>
+
+    <!-- Generate Section -->
+    <section id="generate-section" class="card">
+      <div class="form-group">
+        <label>Member List (CSV)</label>
+        <div class="drop-zone" id="drop-zone">
+          <div class="drop-zone-icon">📄</div>
+          <p class="drop-zone-text">
+            Drag & drop CSV file here<br>
+            or <strong>click to browse</strong>
+          </p>
+          <p class="drop-zone-filename" id="file-name"></p>
+          <input type="file" id="csv-file" accept=".csv,.txt">
+        </div>
+        <p class="hint">Data is processed locally and never stored.</p>
+      </div>
+
+      <div class="form-group">
+        <label for="club-id">Club ID</label>
+        <input type="text" id="club-id" placeholder="e.g., SWIM-CLUB-2024">
+        <p class="hint">Short identifier for your club (letters, numbers, hyphens)</p>
+      </div>
+
+      <div class="form-group">
+        <label for="admin-password">Admin Password</label>
+        <input type="password" id="admin-password" placeholder="At least 8 characters">
+        <p class="hint">Keep this secret. Same password regenerates the same club key.</p>
+      </div>
+
+      <button class="btn-primary" id="generate-btn">Generate Member Codes</button>
+
+      <div id="generate-result" class="hidden" style="margin-top: 1rem;"></div>
+
+      <div id="output-section" class="hidden" style="margin-top: 1.5rem;">
+        <div class="output-group">
+          <div class="output-header">
+            <label for="club-key-output">Club Verification Key</label>
+            <button class="btn-secondary" id="copy-key-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Copy Key</button>
+          </div>
+          <textarea id="club-key-output" rows="2" readonly></textarea>
+          <p class="hint">Share this key with verifiers (trainers, officials)</p>
+        </div>
+
+        <div class="output-group">
+          <div class="output-header">
+            <label for="codes-output">Member Codes</label>
+            <button class="btn-secondary" id="download-codes-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Download CSV</button>
+          </div>
+          <textarea id="codes-output" rows="8" readonly></textarea>
+          <p class="hint">Each member gets one code. Codes contain no personal data.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Verify Section -->
+    <section id="verify-section" class="card hidden">
+      <div class="form-group">
+        <label for="verify-club-key">Club Verification Key</label>
+        <input type="text" id="verify-club-key" placeholder="Paste the club key here">
+      </div>
+
+      <div class="form-group">
+        <label for="verify-club-id">Club ID</label>
+        <input type="text" id="verify-club-id" placeholder="e.g., SWIM-CLUB-2024">
+      </div>
+
+      <div class="form-group">
+        <label for="member-code">Member Code</label>
+        <input type="text" id="member-code" placeholder="847291" inputmode="numeric" pattern="[0-9]{6}" maxlength="6">
+        <p class="hint">Enter the 6-digit code</p>
+      </div>
+
+      <button class="btn-primary" id="verify-btn">Verify</button>
+
+      <div id="verify-result" class="result hidden"></div>
+    </section>
+
+    <div class="privacy-note">
+      <strong>Privacy by Design</strong>
+      All processing happens in your browser. No data is sent to any server.
+      Member codes contain no personal information - they are cryptographic proofs only.
+    </div>
+
+    <footer>
+      <p>
+        <a href="https://github.com/trotor/membership-proof" target="_blank">GitHub</a>
+        · Tero Rönkkö
+      </p>
+    </footer>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

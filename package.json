@@ -1,0 +1,17 @@
+{
+  "name": "membership-proof",
+  "version": "1.0.0",
+  "description": "Privacy-preserving membership verification system using cryptographic proofs",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3",
+    "vite": "^5.0.10"
+  },
+  "license": "MIT"
+}
