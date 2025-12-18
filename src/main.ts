@@ -489,8 +489,8 @@ generateBtn.addEventListener('click', async () => {
       clubKeyOutput.value = clubKey;
       currentNamedCodes = codes;
 
-      // Show NAME: CODE format in textarea
-      namedCodesTextarea.value = codes.map(c => `${c.name}: ${c.code}`).join('\n');
+      // Show NAME.CODE format in textarea (same format used for verification)
+      namedCodesTextarea.value = codes.map(c => `${c.name}.${c.code}`).join('\n');
 
       generateResult.innerHTML = `
         <div class="success">
