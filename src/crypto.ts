@@ -332,7 +332,97 @@ export async function generateCodesByCount(
 }
 
 // Code system type
-export type CodeSystem = 'simple' | 'qr';
+export type CodeSystem = 'simple' | 'named' | 'qr';
+
+// Named code result
+export interface NamedCodeResult {
+  name: string;
+  code: string;  // Just the 6 digits
+  fullCode: string;  // NAME.123456 format
+}
+
+// Compute 6-digit signature for a name
+async function computeNameSignature(
+  clubKey: CryptoKey,
+  clubId: string,
+  name: string
+): Promise<number> {
+  const encoder = new TextEncoder();
+  const normalizedName = name.toUpperCase().trim();
+  const message = encoder.encode(`${clubId.toUpperCase()}|NAME|${normalizedName}`);
+
+  const signature = await crypto.subtle.sign('HMAC', clubKey, message.buffer as ArrayBuffer);
+  const view = new DataView(signature);
+
+  // Use first 4 bytes to get a number, then mod 1000000 for 6 digits
+  const num = view.getUint32(0, false);
+  return num % 1000000;
+}
+
+// Generate named codes from CSV
+export async function generateNamedCodesFromCSV(
+  csvContent: string,
+  adminPassword: string,
+  clubId: string
+): Promise<{ clubKey: string; codes: NamedCodeResult[] }> {
+  const rows = parseCSV(csvContent);
+
+  // Skip header if present
+  const startIndex = rows.length > 0 &&
+    rows[0].some(cell => /^(name|member|id|email|nimi|sukunimi)/i.test(cell)) ? 1 : 0;
+
+  const clubKey = await deriveClubKey(adminPassword, clubId);
+  const exportedKey = await exportClubKey(clubKey);
+
+  const codes: NamedCodeResult[] = [];
+
+  for (let i = startIndex; i < rows.length; i++) {
+    if (rows[i].length > 0 && rows[i][0]) {
+      const name = rows[i][0].trim().toUpperCase();
+      const sig = await computeNameSignature(clubKey, clubId, name);
+      const code = sig.toString().padStart(6, '0');
+
+      codes.push({
+        name,
+        code,
+        fullCode: `${name}.${code}`
+      });
+    }
+  }
+
+  return { clubKey: exportedKey, codes };
+}
+
+// Verify a named code (NAME.123456 format)
+export interface NamedVerificationResult {
+  valid: boolean;
+  name?: string;
+  reason?: 'invalid_format' | 'invalid_code';
+}
+
+export async function verifyNamedCode(
+  input: string,
+  clubKey: CryptoKey,
+  clubId: string
+): Promise<NamedVerificationResult> {
+  // Parse NAME.123456 format
+  const match = input.match(/^([A-Za-z\u00C0-\u017F]+)\.(\d{6})$/);
+  if (!match) {
+    return { valid: false, reason: 'invalid_format' };
+  }
+
+  const name = match[1].toUpperCase();
+  const providedCode = parseInt(match[2], 10);
+
+  // Compute expected code
+  const expectedCode = await computeNameSignature(clubKey, clubId, name);
+
+  if (providedCode !== expectedCode) {
+    return { valid: false, reason: 'invalid_code' };
+  }
+
+  return { valid: true, name };
+}
 
 // QR code result
 export interface QRCodeResult {

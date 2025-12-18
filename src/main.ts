@@ -5,12 +5,15 @@
 
 import {
   generateCodesByCount,
+  generateNamedCodesFromCSV,
   generateQRCodesFromCSV,
   importClubKey,
   verifyMemberCode,
+  verifyNamedCode,
   decryptMemberData,
   parseMemberCode,
   type CodeSystem,
+  type NamedCodeResult,
   type QRCodeResult,
 } from './crypto';
 
@@ -29,6 +32,8 @@ const translations: Record<string, Record<string, string>> = {
     code_system: 'Code System',
     simple_codes_title: 'Simple 6-digit codes',
     simple_codes_desc: 'Easy to remember, just specify how many codes you need',
+    named_codes_title: 'Name + code (SMITH.847291)',
+    named_codes_desc: 'Member says name and code, verifier sees if they match',
     qr_codes_title: 'QR codes with names',
     qr_codes_desc: 'Upload member list, QR reveals name when scanned',
     code_count: 'Number of Codes',
@@ -38,6 +43,9 @@ const translations: Record<string, Record<string, string>> = {
     drop_zone_or: 'or',
     drop_zone_browse: 'click to browse',
     csv_hint: 'First column should contain surnames. Data is processed locally.',
+    csv_hint_named: 'First column should contain surnames. Each name gets a unique code.',
+    named_codes: 'Named Codes',
+    named_codes_hint: 'Give each member their code (just the number - they know their name).',
     base_url: 'Verification URL Base',
     base_url_hint: 'The URL where your app is hosted (auto-filled)',
     club_id: 'Club ID',
@@ -57,14 +65,16 @@ const translations: Record<string, Record<string, string>> = {
     verify_club_key: 'Club Verification Key',
     verify_club_id: 'Club ID',
     member_code: 'Member Code',
-    member_code_hint: 'Enter the 6-digit code',
+    member_code_hint: 'Enter 6-digit code or NAME.CODE format',
     verify_btn: 'Verify',
     privacy_title: 'Privacy by Design',
     privacy_text: 'All processing happens in your browser. No data is sent to any server. Member codes contain no personal information - they are cryptographic proofs only.',
     lang_toggle: 'Suomeksi',
     generated_codes: 'Generated {count} member codes',
+    generated_named: 'Generated {count} named codes',
     generated_qr: 'Generated {count} QR codes',
     distribute_key: 'Share the club key with verifiers. Give one code to each member.',
+    distribute_named: 'Share the club key with verifiers. Give each member their number (they know their name).',
     distribute_qr: 'Share the club key with verifiers. Send each QR to the respective member.',
     valid_member: 'VALID MEMBER',
     invalid_format: 'INVALID - Incorrect code format',
@@ -92,6 +102,8 @@ const translations: Record<string, Record<string, string>> = {
     code_system: 'Koodijärjestelmä',
     simple_codes_title: 'Yksinkertaiset 6-numeroiset koodit',
     simple_codes_desc: 'Helppo muistaa, määritä vain koodien lukumäärä',
+    named_codes_title: 'Nimi + koodi (VIRTANEN.847291)',
+    named_codes_desc: 'Jäsen sanoo nimen ja koodin, tarkistaja näkee täsmäävätkö',
     qr_codes_title: 'QR-koodit nimillä',
     qr_codes_desc: 'Lataa jäsenlista, QR näyttää nimen skannattaessa',
     code_count: 'Koodien määrä',
@@ -101,6 +113,9 @@ const translations: Record<string, Record<string, string>> = {
     drop_zone_or: 'tai',
     drop_zone_browse: 'klikkaa selataksesi',
     csv_hint: 'Ensimmäisen sarakkeen tulee sisältää sukunimet. Data käsitellään paikallisesti.',
+    csv_hint_named: 'Ensimmäisen sarakkeen tulee sisältää sukunimet. Jokainen nimi saa oman koodin.',
+    named_codes: 'Nimikoodit',
+    named_codes_hint: 'Anna jokaiselle jäsenelle hänen koodinsa (pelkkä numero - he tietävät nimensä).',
     base_url: 'Varmistus-URL:n pohja',
     base_url_hint: 'URL jossa sovellus on julkaistu (täytetään automaattisesti)',
     club_id: 'Seuran tunnus',
@@ -120,14 +135,16 @@ const translations: Record<string, Record<string, string>> = {
     verify_club_key: 'Seuran varmistusavain',
     verify_club_id: 'Seuran tunnus',
     member_code: 'Jäsenkoodi',
-    member_code_hint: 'Syötä 6-numeroinen koodi',
+    member_code_hint: 'Syötä 6-numeroinen koodi tai NIMI.KOODI-muoto',
     verify_btn: 'Varmista',
     privacy_title: 'Yksityisyys sisäänrakennettuna',
     privacy_text: 'Kaikki käsittely tapahtuu selaimessasi. Mitään dataa ei lähetetä palvelimelle. Jäsenkoodit eivät sisällä henkilötietoja - ne ovat vain kryptografisia todisteita.',
     lang_toggle: 'In English',
     generated_codes: 'Luotiin {count} jäsenkoodia',
+    generated_named: 'Luotiin {count} nimikoodia',
     generated_qr: 'Luotiin {count} QR-koodia',
     distribute_key: 'Jaa seuran avain varmistajille. Anna yksi koodi jokaiselle jäsenelle.',
+    distribute_named: 'Jaa seuran avain varmistajille. Anna jokaiselle jäsenelle hänen numeronsa (he tietävät nimensä).',
     distribute_qr: 'Jaa seuran avain varmistajille. Lähetä jokainen QR vastaavalle jäsenelle.',
     valid_member: 'VOIMASSA OLEVA JÄSEN',
     invalid_format: 'VIRHEELLINEN - Väärä koodimuoto',
@@ -198,12 +215,24 @@ const copyKeyBtn = document.getElementById('copy-key-btn') as HTMLButtonElement;
 // Code system elements
 const codeSystemRadios = document.querySelectorAll('input[name="code-system"]') as NodeListOf<HTMLInputElement>;
 const simpleInputs = document.getElementById('simple-inputs') as HTMLElement;
+const namedInputs = document.getElementById('named-inputs') as HTMLElement;
 const qrInputs = document.getElementById('qr-inputs') as HTMLElement;
 const baseUrlInput = document.getElementById('base-url') as HTMLInputElement;
 const simpleCodesOutput = document.getElementById('simple-codes-output') as HTMLElement;
+const namedCodesOutput = document.getElementById('named-codes-output') as HTMLElement;
+const namedCodesTextarea = document.getElementById('named-codes-textarea') as HTMLTextAreaElement;
 const qrCodesOutput = document.getElementById('qr-codes-output') as HTMLElement;
 const qrGrid = document.getElementById('qr-grid') as HTMLElement;
 const downloadQrBtn = document.getElementById('download-qr-btn') as HTMLButtonElement;
+const downloadNamedBtn = document.getElementById('download-named-btn') as HTMLButtonElement;
+
+// Named code file elements
+const dropZoneNamed = document.getElementById('drop-zone-named') as HTMLElement;
+const csvFileNamedInput = document.getElementById('csv-file-named') as HTMLInputElement;
+const fileNameNamedDisplay = document.getElementById('file-name-named') as HTMLElement;
+
+// Store named codes for download
+let currentNamedCodes: NamedCodeResult[] = [];
 
 // Verify form elements
 const verifyClubKeyInput = document.getElementById('verify-club-key') as HTMLInputElement;
@@ -246,11 +275,15 @@ function getSelectedCodeSystem(): CodeSystem {
 codeSystemRadios.forEach(radio => {
   radio.addEventListener('change', () => {
     const system = getSelectedCodeSystem();
+    simpleInputs.classList.add('hidden');
+    namedInputs.classList.add('hidden');
+    qrInputs.classList.add('hidden');
+
     if (system === 'simple') {
       simpleInputs.classList.remove('hidden');
-      qrInputs.classList.add('hidden');
+    } else if (system === 'named') {
+      namedInputs.classList.remove('hidden');
     } else {
-      simpleInputs.classList.add('hidden');
       qrInputs.classList.remove('hidden');
       // Auto-fill base URL
       if (!baseUrlInput.value) {
@@ -306,6 +339,55 @@ dropZone.addEventListener('drop', (e) => {
   const file = e.dataTransfer?.files[0];
   if (file) {
     handleFile(file);
+  }
+});
+
+// Named file handling
+function updateFileDisplayNamed(file: File | null) {
+  if (file) {
+    fileNameNamedDisplay.textContent = `✓ ${file.name}`;
+    dropZoneNamed.classList.add('has-file');
+  } else {
+    fileNameNamedDisplay.textContent = '';
+    dropZoneNamed.classList.remove('has-file');
+  }
+}
+
+function handleFileNamed(file: File) {
+  if (file.type === 'text/csv' || file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
+    const dataTransfer = new DataTransfer();
+    dataTransfer.items.add(file);
+    csvFileNamedInput.files = dataTransfer.files;
+    updateFileDisplayNamed(file);
+  }
+}
+
+dropZoneNamed.addEventListener('click', () => {
+  csvFileNamedInput.click();
+});
+
+csvFileNamedInput.addEventListener('change', () => {
+  const file = csvFileNamedInput.files?.[0] || null;
+  updateFileDisplayNamed(file);
+});
+
+dropZoneNamed.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropZoneNamed.classList.add('drag-over');
+});
+
+dropZoneNamed.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  dropZoneNamed.classList.remove('drag-over');
+});
+
+dropZoneNamed.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropZoneNamed.classList.remove('drag-over');
+
+  const file = e.dataTransfer?.files[0];
+  if (file) {
+    handleFileNamed(file);
   }
 });
 
@@ -367,6 +449,46 @@ generateBtn.addEventListener('click', async () => {
       `;
 
       simpleCodesOutput.classList.remove('hidden');
+      namedCodesOutput.classList.add('hidden');
+      qrCodesOutput.classList.add('hidden');
+      generateResult.classList.remove('hidden');
+      document.getElementById('output-section')?.classList.remove('hidden');
+    } catch (err) {
+      showError(generateResult, `Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      generateBtn.disabled = false;
+      generateBtn.textContent = t('generate_btn');
+    }
+  } else if (codeSystem === 'named') {
+    // Named code generation
+    const file = csvFileNamedInput.files?.[0];
+    if (!file) {
+      showError(generateResult, t('error_select_csv'));
+      return;
+    }
+
+    generateBtn.disabled = true;
+    generateBtn.textContent = t('generating');
+
+    try {
+      const csvContent = await file.text();
+      const { clubKey, codes } = await generateNamedCodesFromCSV(csvContent, adminPassword, clubId);
+
+      clubKeyOutput.value = clubKey;
+      currentNamedCodes = codes;
+
+      // Show NAME: CODE format in textarea
+      namedCodesTextarea.value = codes.map(c => `${c.name}: ${c.code}`).join('\n');
+
+      generateResult.innerHTML = `
+        <div class="success">
+          <strong>${t('generated_named', { count: codes.length })}</strong>
+          <p>${t('distribute_named')}</p>
+        </div>
+      `;
+
+      simpleCodesOutput.classList.add('hidden');
+      namedCodesOutput.classList.remove('hidden');
       qrCodesOutput.classList.add('hidden');
       generateResult.classList.remove('hidden');
       document.getElementById('output-section')?.classList.remove('hidden');
@@ -413,6 +535,7 @@ generateBtn.addEventListener('click', async () => {
       `;
 
       simpleCodesOutput.classList.add('hidden');
+      namedCodesOutput.classList.add('hidden');
       qrCodesOutput.classList.remove('hidden');
       generateResult.classList.remove('hidden');
       document.getElementById('output-section')?.classList.remove('hidden');
@@ -423,6 +546,21 @@ generateBtn.addEventListener('click', async () => {
       generateBtn.textContent = t('generate_btn');
     }
   }
+});
+
+// Download named codes as CSV
+downloadNamedBtn.addEventListener('click', () => {
+  if (currentNamedCodes.length === 0) return;
+
+  const clubId = clubIdInput.value.trim().toUpperCase();
+  const csvContent = 'Name,Code\n' + currentNamedCodes.map(c => `${c.name},${c.code}`).join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${clubId}-named-codes.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
 });
 
 // Download codes as CSV
@@ -497,6 +635,38 @@ async function handleVerification() {
         memberCodeInput.placeholder = '847291';
       } else {
         showVerifyResult('invalid', t('invalid_qr'));
+      }
+    } catch {
+      showVerifyResult('error', t('error_key'));
+    } finally {
+      verifyBtn.disabled = false;
+      verifyBtn.textContent = t('verify_btn');
+    }
+    return;
+  }
+
+  // Check if it's a named code (NAME.123456 format)
+  const isNamedCode = /^[A-Za-z\u00C0-\u017F]+\.\d{6}$/.test(memberCode);
+
+  if (isNamedCode) {
+    // Named code verification
+    if (!clubId) {
+      showVerifyResult('error', t('error_enter_club_id'));
+      return;
+    }
+
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = t('verifying');
+
+    try {
+      const clubKey = await importClubKey(clubKeyStr);
+      const result = await verifyNamedCode(memberCode, clubKey, clubId);
+
+      if (result.valid && result.name) {
+        saveClubKeyToStorage(clubKeyStr, clubId);
+        showVerifyResult('valid', t('valid_member'), result.name);
+      } else {
+        showVerifyResult('invalid', t('invalid_code'));
       }
     } catch {
       showVerifyResult('error', t('error_key'));

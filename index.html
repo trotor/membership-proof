@@ -505,6 +505,13 @@
             </span>
           </label>
           <label class="radio-option">
+            <input type="radio" name="code-system" value="named">
+            <span class="radio-label">
+              <strong data-i18n="named_codes_title">Name + code (SMITH.847291)</strong>
+              <small data-i18n="named_codes_desc">Member says name and code, verifier sees if they match</small>
+            </span>
+          </label>
+          <label class="radio-option">
             <input type="radio" name="code-system" value="qr">
             <span class="radio-label">
               <strong data-i18n="qr_codes_title">QR codes with names</strong>
@@ -520,6 +527,23 @@
           <label for="code-count" data-i18n="code_count">Number of Codes</label>
           <input type="number" id="code-count" min="1" max="1000" value="20" placeholder="1-1000">
           <p class="hint" data-i18n="code_count_hint">How many member codes to generate (max 1000)</p>
+        </div>
+      </div>
+
+      <!-- Named code inputs -->
+      <div id="named-inputs" class="hidden">
+        <div class="form-group">
+          <label data-i18n="member_list">Member List (CSV)</label>
+          <div class="drop-zone" id="drop-zone-named">
+            <div class="drop-zone-icon">📄</div>
+            <p class="drop-zone-text">
+              <span data-i18n="drop_zone_text">Drag & drop CSV file here</span><br>
+              <span data-i18n="drop_zone_or">or</span> <strong data-i18n="drop_zone_browse">click to browse</strong>
+            </p>
+            <p class="drop-zone-filename" id="file-name-named"></p>
+            <input type="file" id="csv-file-named" accept=".csv,.txt">
+          </div>
+          <p class="hint" data-i18n="csv_hint_named">First column should contain surnames. Each name gets a unique code.</p>
         </div>
       </div>
 
@@ -583,6 +607,16 @@
           <p class="hint" data-i18n="codes_hint">Give one code to each member. Codes contain no personal data.</p>
         </div>
 
+        <!-- Named codes output -->
+        <div class="output-group hidden" id="named-codes-output">
+          <div class="output-header">
+            <label data-i18n="named_codes">Named Codes</label>
+            <button class="btn-secondary" id="download-named-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;" data-i18n="download_csv">Download CSV</button>
+          </div>
+          <textarea id="named-codes-textarea" rows="8" readonly></textarea>
+          <p class="hint" data-i18n="named_codes_hint">Give each member their code (just the number - they know their name).</p>
+        </div>
+
         <!-- QR codes output -->
         <div class="output-group hidden" id="qr-codes-output">
           <div class="output-header">
@@ -609,8 +643,8 @@
 
       <div class="form-group">
         <label for="member-code" data-i18n="member_code">Member Code</label>
-        <input type="text" id="member-code" placeholder="847291" inputmode="numeric" pattern="[0-9]{6}" maxlength="6">
-        <p class="hint" data-i18n="member_code_hint">Enter the 6-digit code</p>
+        <input type="text" id="member-code" placeholder="847291 or SMITH.847291">
+        <p class="hint" data-i18n="member_code_hint">Enter 6-digit code or NAME.CODE format</p>
       </div>
 
       <button class="btn-primary" id="verify-btn" data-i18n="verify_btn">Verify</button>
