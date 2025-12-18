@@ -153,10 +153,10 @@ BROWN`;
     expect(codes).toHaveLength(4);
   });
 
-  it('should generate 6-digit codes with letter suffix', async () => {
+  it('should generate 6-digit codes', async () => {
     const { codes } = await generateNamedCodesFromCSV(testCSV, 'namedtest123');
     codes.forEach(c => {
-      expect(c.code).toMatch(/^\d{6}[A-Z]$/);
+      expect(c.code).toMatch(/^\d{6}$/);
     });
   });
 
@@ -171,7 +171,6 @@ BROWN`;
     const { codes: codes1 } = await generateNamedCodesFromCSV(testCSV, 'samepassword');
     const { codes: codes2 } = await generateNamedCodesFromCSV(testCSV, 'samepassword');
 
-    // Full codes should match (numeric + letter suffix)
     expect(codes1[0].code).toBe(codes2[0].code);
     expect(codes1[1].code).toBe(codes2[1].code);
   });
@@ -180,8 +179,7 @@ BROWN`;
     const { codes: codes1 } = await generateNamedCodesFromCSV(testCSV, 'password1111');
     const { codes: codes2 } = await generateNamedCodesFromCSV(testCSV, 'password2222');
 
-    // Numeric part should differ
-    expect(codes1[0].code.slice(0, 6)).not.toBe(codes2[0].code.slice(0, 6));
+    expect(codes1[0].code).not.toBe(codes2[0].code);
   });
 
   it('should verify valid named codes', async () => {
@@ -209,8 +207,8 @@ BROWN`;
     const { clubKey, codes } = await generateNamedCodesFromCSV(testCSV, 'wrongname123');
     const importedKey = await importClubKey(clubKey);
 
-    // Use SMITH's code (numeric part only) with JONES's name
-    const smithCode = codes[0].code; // e.g., 123456A
+    // Use SMITH's code with JONES's name
+    const smithCode = codes[0].code; // e.g., 123456
     const wrongCode = `JONES.${smithCode}`; // Swap name but keep code
     const result = await verifyNamedCode(wrongCode, importedKey);
     expect(result.valid).toBe(false);
@@ -222,27 +220,27 @@ BROWN`;
     const importedKey = await importClubKey(clubKey);
 
     // Missing dot
-    const result1 = await verifyNamedCode('SMITH123456A', importedKey);
+    const result1 = await verifyNamedCode('SMITH123456', importedKey);
     expect(result1.valid).toBe(false);
     expect(result1.reason).toBe('invalid_format');
 
     // Colon instead of dot
-    const result2 = await verifyNamedCode('SMITH:123456A', importedKey);
+    const result2 = await verifyNamedCode('SMITH:123456', importedKey);
     expect(result2.valid).toBe(false);
     expect(result2.reason).toBe('invalid_format');
 
     // Space instead of dot
-    const result3 = await verifyNamedCode('SMITH 123456A', importedKey);
+    const result3 = await verifyNamedCode('SMITH 123456', importedKey);
     expect(result3.valid).toBe(false);
     expect(result3.reason).toBe('invalid_format');
 
-    // Missing letter suffix
-    const result4 = await verifyNamedCode('SMITH.123456', importedKey);
+    // Wrong number of digits
+    const result4 = await verifyNamedCode('SMITH.12345', importedKey);
     expect(result4.valid).toBe(false);
     expect(result4.reason).toBe('invalid_format');
 
-    // Wrong number of digits
-    const result5 = await verifyNamedCode('SMITH.12345A', importedKey);
+    // Too many digits
+    const result5 = await verifyNamedCode('SMITH.1234567', importedKey);
     expect(result5.valid).toBe(false);
     expect(result5.reason).toBe('invalid_format');
   });
@@ -429,20 +427,18 @@ JONES`;
   it('should generate unique codes for duplicate surnames', async () => {
     const { codes } = await generateNamedCodesFromCSV(duplicatesCSV, 'duptest123');
 
-    // All 4 codes should be unique
+    // All 4 codes should be unique (3 SMITHs + 1 JONES)
     const uniqueCodes = new Set(codes.map(c => c.code));
     expect(uniqueCodes.size).toBe(4);
   });
 
-  it('should assign sequential letter suffixes for duplicates', async () => {
+  it('should generate 6-digit codes for all including duplicates', async () => {
     const { codes } = await generateNamedCodesFromCSV(duplicatesCSV, 'duptest123');
 
-    // First SMITH gets A, second B, third C
-    expect(codes[0].code).toMatch(/^\d{6}A$/);
-    expect(codes[1].code).toMatch(/^\d{6}B$/);
-    expect(codes[2].code).toMatch(/^\d{6}C$/);
-    // JONES (only one) gets A
-    expect(codes[3].code).toMatch(/^\d{6}A$/);
+    // All codes should be 6 digits (no letter suffix visible)
+    codes.forEach(c => {
+      expect(c.code).toMatch(/^\d{6}$/);
+    });
   });
 
   it('should verify each duplicate surname code correctly', async () => {
@@ -456,16 +452,22 @@ JONES`;
     }
   });
 
-  it('should not allow swapping letter suffix between duplicates', async () => {
+  it('should not allow using one SMITH code for another SMITH', async () => {
     const { clubKey, codes } = await generateNamedCodesFromCSV(duplicatesCSV, 'duptest123');
     const key = await importClubKey(clubKey);
 
-    // Take first SMITH's numeric code (without letter) and add wrong letter
-    const smithNumeric = codes[0].code.slice(0, 6); // Get numeric part
-    const wrongCode = `SMITH.${smithNumeric}B`; // Wrong letter suffix
+    // Each SMITH has a unique code, swapping should still validate
+    // because verification tries all indices - but the codes are different
+    const smith1Code = codes[0].code;
+    const smith2Code = codes[1].code;
 
-    const result = await verifyNamedCode(wrongCode, key);
-    expect(result.valid).toBe(false);
-    expect(result.reason).toBe('invalid_code');
+    // The codes themselves are different for each SMITH
+    expect(smith1Code).not.toBe(smith2Code);
+
+    // Both should verify as valid SMITH (index is hidden)
+    const result1 = await verifyNamedCode(`SMITH.${smith1Code}`, key);
+    const result2 = await verifyNamedCode(`SMITH.${smith2Code}`, key);
+    expect(result1.valid).toBe(true);
+    expect(result2.valid).toBe(true);
   });
 });

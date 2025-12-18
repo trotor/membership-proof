@@ -395,11 +395,7 @@ export async function generateNamedCodesFromCSV(
 
       // Compute signature with index for uniqueness
       const sig = await computeNameSignature(clubKey, surname, count);
-      const numCode = sig.toString().padStart(6, '0');
-
-      // Add hidden index as letter suffix (A=first, B=second, etc.)
-      const indexLetter = String.fromCharCode(65 + count); // A, B, C, ...
-      const code = `${numCode}${indexLetter}`;
+      const code = sig.toString().padStart(6, '0');
 
       codes.push({
         name: surname,
@@ -419,12 +415,15 @@ export interface NamedVerificationResult {
   reason?: 'invalid_format' | 'invalid_code';
 }
 
+// Maximum number of duplicate surnames to check during verification
+const MAX_DUPLICATE_INDEX = 50;
+
 export async function verifyNamedCode(
   input: string,
   clubKey: CryptoKey
 ): Promise<NamedVerificationResult> {
-  // Parse NAME.123456X format (6 digits + letter suffix for index)
-  const match = input.match(/^([A-Za-z\u00C0-\u017F][A-Za-z\u00C0-\u017F\s\-]*)\.(\d{6})([A-Za-z])$/);
+  // Parse NAME.123456 format (6 digits, no letter suffix)
+  const match = input.match(/^([A-Za-z\u00C0-\u017F][A-Za-z\u00C0-\u017F\s\-]*)\.(\d{6})$/);
   if (!match) {
     return { valid: false, reason: 'invalid_format' };
   }
@@ -434,21 +433,19 @@ export async function verifyNamedCode(
   const nameParts = fullName.split(/\s+/);
   const surname = nameParts[nameParts.length - 1];
 
-  // Extract index from letter suffix (A=0, B=1, C=2, ...)
-  const indexLetter = match[3].toUpperCase();
-  const index = indexLetter.charCodeAt(0) - 65; // A=0, B=1, etc.
-
   const providedCode = parseInt(match[2], 10);
 
-  // Compute expected code with index
-  const expectedCode = await computeNameSignature(clubKey, surname, index);
-
-  if (providedCode !== expectedCode) {
-    return { valid: false, reason: 'invalid_code' };
+  // Try all possible indices until we find a match
+  for (let index = 0; index < MAX_DUPLICATE_INDEX; index++) {
+    const expectedCode = await computeNameSignature(clubKey, surname, index);
+    if (providedCode === expectedCode) {
+      // Found a match - return valid
+      return { valid: true, name: surname };
+    }
   }
 
-  // Return just the surname (user doesn't need to know their index)
-  return { valid: true, name: surname };
+  // No match found after trying all indices
+  return { valid: false, reason: 'invalid_code' };
 }
 
 // QR code result
