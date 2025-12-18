@@ -38,7 +38,7 @@ Membership Proof provides **cryptographic membership verification** with these k
 | System | Best For | Member Receives | Verification |
 |--------|----------|-----------------|--------------|
 | **Simple 6-digit** | Quick, anonymous verification | Just a number: `847291` | Enter code |
-| **Name + code** | Named verification, easy to remember | Number only: `189403` (they know their name) | Enter `SMITH.189403` |
+| **Name + code** | Named verification, easy to remember | Number only: `841410` (they know their name) | Enter `SMITH.841410` |
 | **QR codes** | Scan-based verification with name | QR code image | Scan with phone |
 
 ## Quick Start
@@ -117,14 +117,26 @@ Verification: HMAC(key, RRR) mod 1000 == SSS
 ### Name + Code System
 
 ```
-Code format: LASTNAME.NNNNNN (e.g., SMITH.189403)
+Code format: LASTNAME.NNNNNN (e.g., SMITH.841410)
 
-Generation: NNNNNN = HMAC(key, "NAME|SMITH") mod 1000000
-Verification: Recompute HMAC and compare
+Generation: NNNNNN = HMAC(key, "NAME|LASTNAME|index") mod 1000000
+Verification: Try indices 0-49 until HMAC matches
 ```
 
-- Unlimited unique codes (one per unique name)
-- Name is cryptographically bound to code
+**Example with password "PASSWORD":**
+
+| CSV Input | Generated Code |
+|-----------|----------------|
+| John Smith | `SMITH.841410` |
+| Jane Smith | `SMITH.026731` |
+| Bob Smith | `SMITH.991928` |
+| Alice Jones | `JONES.963921` |
+| Tom Jones | `JONES.496765` |
+
+**Key features:**
+- Each person with the same surname gets a unique code
+- The duplicate index is hidden - user doesn't know they're "the second Smith"
+- Verification tries all possible indices until match found
 - Member only needs to remember the number (they know their name)
 
 ### QR Codes with Names
@@ -214,6 +226,75 @@ A: It should be shared only with authorized verifiers. It cannot generate new co
 
 **Q: What if the club key leaks?**
 A: Change the admin password to generate new codes and a new club key. Old codes become invalid.
+
+## Calculation Examples
+
+### Complete Workflow Example
+
+**Step 1: Admin generates codes**
+```
+Password: "PASSWORD"
+CSV file:
+  name
+  John Smith
+  Jane Smith
+  Alice Jones
+```
+
+**Step 2: System derives club key**
+```
+Club Key = PBKDF2(password="PASSWORD", salt="membership-proof-key-derivation-v2:MEMBERSHIP-CODES-V1", iterations=100000)
+         = EOOe1zGPlsCkJE6wdW5COwyCWP-XBQ1mZ5ih9bDOtWuzKI0I_MJ_UfEtyZV9IzKV9kOVqtFletQd9Be7Cnvfqg
+```
+
+**Step 3: System generates codes**
+```
+For "John Smith" (surname=SMITH, index=0):
+  Signature = HMAC-SHA256(key, "NAME|SMITH|0")
+  Code = first_4_bytes(Signature) mod 1000000 = 841410
+  Output: SMITH.841410
+
+For "Jane Smith" (surname=SMITH, index=1):
+  Signature = HMAC-SHA256(key, "NAME|SMITH|1")
+  Code = first_4_bytes(Signature) mod 1000000 = 026731
+  Output: SMITH.026731
+
+For "Alice Jones" (surname=JONES, index=0):
+  Signature = HMAC-SHA256(key, "NAME|JONES|0")
+  Code = first_4_bytes(Signature) mod 1000000 = 963921
+  Output: JONES.963921
+```
+
+**Step 4: Admin distributes**
+- Gives John Smith: "Your code is 841410"
+- Gives Jane Smith: "Your code is 026731"
+- Gives Alice Jones: "Your code is 963921"
+- Shares Club Key with verifiers
+
+**Step 5: Verification**
+```
+Member says: "Smith, 841410"
+Verifier enters: SMITH.841410
+
+System tries:
+  HMAC(key, "NAME|SMITH|0") mod 1000000 = 841410 ✓ MATCH!
+
+Result: ✅ VALID MEMBER: SMITH
+```
+
+### Why Duplicate Names Work
+
+Each surname occurrence gets a different index:
+
+```
+CSV:                Generated:
+  VIRTANEN     →    VIRTANEN.809199  (index 0)
+  KORHONEN     →    KORHONEN.733133  (index 0)
+  VIRTANEN     →    VIRTANEN.384521  (index 1)  ← Different code!
+  VIRTANEN     →    VIRTANEN.192847  (index 2)  ← Different code!
+```
+
+The user never sees the index - they just get their unique 6-digit code.
 
 ## License
 
