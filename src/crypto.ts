@@ -5,6 +5,8 @@
  * All operations happen client-side - no personal data leaves the browser.
  */
 
+import QRCode from 'qrcode';
+
 const PBKDF2_ITERATIONS = 100000;
 const PBKDF2_SALT = 'membership-proof-key-derivation-v2';
 
@@ -134,6 +136,94 @@ export interface VerificationResult {
   reason?: 'invalid_format' | 'invalid_code';
 }
 
+// QR code verification result (with name)
+export interface QRVerificationResult {
+  valid: boolean;
+  name?: string;
+  index?: number;
+  reason?: 'invalid_format' | 'invalid_key' | 'decryption_failed';
+}
+
+// Derive AES key from club key for encryption
+async function deriveAESKey(clubKey: CryptoKey): Promise<CryptoKey> {
+  // Export HMAC key and use it to derive AES key
+  const rawKey = await crypto.subtle.exportKey('raw', clubKey);
+
+  // Use first 32 bytes for AES-256
+  return crypto.subtle.importKey(
+    'raw',
+    rawKey.slice(0, 32),
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+// Encrypt member data for QR code
+export async function encryptMemberData(
+  clubKey: CryptoKey,
+  name: string,
+  index: number
+): Promise<string> {
+  const aesKey = await deriveAESKey(clubKey);
+  const encoder = new TextEncoder();
+
+  const data = JSON.stringify({ name: name.toUpperCase(), idx: index });
+  const plaintext = encoder.encode(data);
+
+  // Generate random IV (12 bytes for AES-GCM)
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  const ciphertext = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    aesKey,
+    plaintext
+  );
+
+  // Combine IV + ciphertext
+  const combined = new Uint8Array(iv.length + ciphertext.byteLength);
+  combined.set(iv);
+  combined.set(new Uint8Array(ciphertext), iv.length);
+
+  return toBase64Url(combined);
+}
+
+// Decrypt member data from QR code
+export async function decryptMemberData(
+  clubKey: CryptoKey,
+  encryptedData: string
+): Promise<QRVerificationResult> {
+  try {
+    const aesKey = await deriveAESKey(clubKey);
+    const combined = fromBase64Url(encryptedData);
+
+    if (combined.length < 13) {
+      return { valid: false, reason: 'invalid_format' };
+    }
+
+    // Extract IV (first 12 bytes) and ciphertext
+    const iv = combined.slice(0, 12);
+    const ciphertext = combined.slice(12);
+
+    const plaintext = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv },
+      aesKey,
+      ciphertext
+    );
+
+    const decoder = new TextDecoder();
+    const data = JSON.parse(decoder.decode(plaintext));
+
+    return {
+      valid: true,
+      name: data.name,
+      index: data.idx
+    };
+  } catch {
+    return { valid: false, reason: 'decryption_failed' };
+  }
+}
+
 // Verify a 6-digit member code
 export async function verifyMemberCode(
   code: string,
@@ -243,4 +333,64 @@ export async function generateCodesFromCSV(
   }
 
   return { clubKey: exportedKey, codes };
+}
+
+// Code system type
+export type CodeSystem = 'simple' | 'qr';
+
+// QR code result
+export interface QRCodeResult {
+  name: string;
+  index: number;
+  verifyUrl: string;
+  qrDataUrl: string;
+}
+
+// Generate QR codes with encrypted names
+export async function generateQRCodesFromCSV(
+  csvContent: string,
+  adminPassword: string,
+  clubId: string,
+  baseUrl: string
+): Promise<{ clubKey: string; qrCodes: QRCodeResult[] }> {
+  const rows = parseCSV(csvContent);
+
+  // Skip header if present
+  const startIndex = rows.length > 0 &&
+    rows[0].some(cell => /^(name|member|id|email|nimi|sukunimi)/i.test(cell)) ? 1 : 0;
+
+  const clubKey = await deriveClubKey(adminPassword, clubId);
+  const exportedKey = await exportClubKey(clubKey);
+
+  const qrCodes: QRCodeResult[] = [];
+
+  for (let i = startIndex; i < rows.length; i++) {
+    if (rows[i].length > 0 && rows[i][0]) {
+      // Get name (first column, assume it's surname)
+      const name = rows[i][0].trim();
+      const index = i - startIndex + 1;
+
+      // Encrypt the member data
+      const encryptedData = await encryptMemberData(clubKey, name, index);
+
+      // Create verification URL
+      const verifyUrl = `${baseUrl}?verify=${encryptedData}`;
+
+      // Generate QR code as data URL
+      const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
+        width: 256,
+        margin: 2,
+        errorCorrectionLevel: 'M'
+      });
+
+      qrCodes.push({
+        name,
+        index,
+        verifyUrl,
+        qrDataUrl
+      });
+    }
+  }
+
+  return { clubKey: exportedKey, qrCodes };
 }

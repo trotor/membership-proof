@@ -316,6 +316,95 @@
       display: none;
     }
 
+    .code-system-selector {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .radio-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .radio-option:hover {
+      border-color: var(--primary);
+    }
+
+    .radio-option:has(input:checked) {
+      border-color: var(--primary);
+      background: #f0f9ff;
+    }
+
+    .radio-option input[type="radio"] {
+      margin-top: 0.25rem;
+      width: auto;
+    }
+
+    .radio-label {
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+    }
+
+    .radio-label strong {
+      font-size: 0.95rem;
+    }
+
+    .radio-label small {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .qr-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1rem;
+      margin-top: 0.5rem;
+    }
+
+    .qr-card {
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .qr-card img {
+      width: 100%;
+      max-width: 150px;
+      height: auto;
+    }
+
+    .qr-card .name {
+      font-weight: 600;
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+    }
+
+    .qr-card .index {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* QR Verification result */
+    .result.valid .member-name {
+      font-size: 1.5rem;
+      margin-top: 0.25rem;
+    }
+
+    .result.valid .member-index {
+      font-size: 0.9rem;
+      opacity: 0.8;
+    }
+
     @media (max-width: 480px) {
       .container {
         padding: 1rem;
@@ -327,6 +416,32 @@
 
       .card {
         padding: 1rem;
+      }
+
+      .qr-grid {
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      }
+    }
+
+    @media print {
+      .tabs, header, .privacy-note, footer,
+      .form-group, .btn-primary, .output-header button,
+      #club-key-output, .hint {
+        display: none !important;
+      }
+
+      .card {
+        box-shadow: none;
+        padding: 0;
+      }
+
+      .qr-grid {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .qr-card {
+        break-inside: avoid;
+        page-break-inside: avoid;
       }
     }
   </style>
@@ -371,6 +486,32 @@
         <p class="hint">Keep this secret. Same password regenerates the same club key.</p>
       </div>
 
+      <div class="form-group">
+        <label>Code System</label>
+        <div class="code-system-selector">
+          <label class="radio-option">
+            <input type="radio" name="code-system" value="simple" checked>
+            <span class="radio-label">
+              <strong>Simple 6-digit codes</strong>
+              <small>Easy to type, no names shown</small>
+            </span>
+          </label>
+          <label class="radio-option">
+            <input type="radio" name="code-system" value="qr">
+            <span class="radio-label">
+              <strong>QR codes with names</strong>
+              <small>Scan to verify, shows member name</small>
+            </span>
+          </label>
+        </div>
+      </div>
+
+      <div class="form-group" id="base-url-group" style="display: none;">
+        <label for="base-url">Verification URL Base</label>
+        <input type="text" id="base-url" placeholder="https://username.github.io/membership-proof">
+        <p class="hint">The base URL where your app is hosted</p>
+      </div>
+
       <button class="btn-primary" id="generate-btn">Generate Member Codes</button>
 
       <div id="generate-result" class="hidden" style="margin-top: 1rem;"></div>
@@ -385,13 +526,24 @@
           <p class="hint">Share this key with verifiers (trainers, officials)</p>
         </div>
 
-        <div class="output-group">
+        <!-- Simple codes output -->
+        <div class="output-group" id="simple-codes-output">
           <div class="output-header">
             <label for="codes-output">Member Codes</label>
             <button class="btn-secondary" id="download-codes-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Download CSV</button>
           </div>
           <textarea id="codes-output" rows="8" readonly></textarea>
           <p class="hint">Each member gets one code. Codes contain no personal data.</p>
+        </div>
+
+        <!-- QR codes output -->
+        <div class="output-group hidden" id="qr-codes-output">
+          <div class="output-header">
+            <label>QR Codes</label>
+            <button class="btn-secondary" id="download-qr-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Print All</button>
+          </div>
+          <div id="qr-grid" class="qr-grid"></div>
+          <p class="hint">Each QR code contains encrypted member name. Share individually with members.</p>
         </div>
       </div>
     </section>

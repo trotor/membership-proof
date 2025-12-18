@@ -5,10 +5,18 @@
 
 import {
   generateCodesFromCSV,
+  generateQRCodesFromCSV,
   importClubKey,
   verifyMemberCode,
+  decryptMemberData,
   parseMemberCode,
+  type CodeSystem,
+  type QRCodeResult,
 } from './crypto';
+
+// Storage keys
+const STORAGE_CLUB_KEY = 'membership-proof-club-key';
+const STORAGE_CLUB_ID = 'membership-proof-club-id';
 
 // DOM Elements
 const tabGenerate = document.getElementById('tab-generate') as HTMLButtonElement;
@@ -28,6 +36,15 @@ const clubKeyOutput = document.getElementById('club-key-output') as HTMLTextArea
 const codesOutput = document.getElementById('codes-output') as HTMLTextAreaElement;
 const downloadCodesBtn = document.getElementById('download-codes-btn') as HTMLButtonElement;
 const copyKeyBtn = document.getElementById('copy-key-btn') as HTMLButtonElement;
+
+// Code system elements
+const codeSystemRadios = document.querySelectorAll('input[name="code-system"]') as NodeListOf<HTMLInputElement>;
+const baseUrlGroup = document.getElementById('base-url-group') as HTMLElement;
+const baseUrlInput = document.getElementById('base-url') as HTMLInputElement;
+const simpleCodesOutput = document.getElementById('simple-codes-output') as HTMLElement;
+const qrCodesOutput = document.getElementById('qr-codes-output') as HTMLElement;
+const qrGrid = document.getElementById('qr-grid') as HTMLElement;
+const downloadQrBtn = document.getElementById('download-qr-btn') as HTMLButtonElement;
 
 // Verify form elements
 const verifyClubKeyInput = document.getElementById('verify-club-key') as HTMLInputElement;
@@ -49,6 +66,26 @@ tabVerify.addEventListener('click', () => {
   tabGenerate.classList.remove('active');
   verifySection.classList.remove('hidden');
   generateSection.classList.add('hidden');
+});
+
+// Code system selection
+function getSelectedCodeSystem(): CodeSystem {
+  for (const radio of codeSystemRadios) {
+    if (radio.checked) return radio.value as CodeSystem;
+  }
+  return 'simple';
+}
+
+codeSystemRadios.forEach(radio => {
+  radio.addEventListener('change', () => {
+    const system = getSelectedCodeSystem();
+    baseUrlGroup.style.display = system === 'qr' ? 'block' : 'none';
+
+    // Auto-fill base URL with current location
+    if (system === 'qr' && !baseUrlInput.value) {
+      baseUrlInput.value = window.location.origin + window.location.pathname.replace(/\/$/, '');
+    }
+  });
 });
 
 // Drag and drop file handling
@@ -100,11 +137,23 @@ dropZone.addEventListener('drop', (e) => {
   }
 });
 
+// Render QR codes grid
+function renderQRCodes(qrCodes: QRCodeResult[]) {
+  qrGrid.innerHTML = qrCodes.map(qr => `
+    <div class="qr-card">
+      <img src="${qr.qrDataUrl}" alt="QR code for ${qr.name}">
+      <div class="name">${qr.name}</div>
+      <div class="index">#${qr.index}</div>
+    </div>
+  `).join('');
+}
+
 // Generate codes
 generateBtn.addEventListener('click', async () => {
   const file = csvFileInput.files?.[0];
   const clubId = clubIdInput.value.trim().toUpperCase();
   const adminPassword = adminPasswordInput.value;
+  const codeSystem = getSelectedCodeSystem();
 
   // Validation
   if (!file) {
@@ -127,29 +176,63 @@ generateBtn.addEventListener('click', async () => {
     return;
   }
 
+  if (codeSystem === 'qr' && !baseUrlInput.value.trim()) {
+    showError(generateResult, 'Please enter the verification URL base for QR codes');
+    return;
+  }
+
   generateBtn.disabled = true;
   generateBtn.textContent = 'Generating...';
 
   try {
     const csvContent = await file.text();
-    const { clubKey, codes } = await generateCodesFromCSV(
-      csvContent,
-      adminPassword,
-      clubId,
-      null
-    );
 
-    clubKeyOutput.value = clubKey;
-    codesOutput.value = codes.join('\n');
+    if (codeSystem === 'simple') {
+      // Simple 6-digit codes
+      const { clubKey, codes } = await generateCodesFromCSV(
+        csvContent,
+        adminPassword,
+        clubId,
+        null
+      );
 
-    generateResult.innerHTML = `
-      <div class="success">
-        <strong>Generated ${codes.length} member codes</strong>
-        <p>Distribute the club key to verifiers. Each member gets one code from the list below.</p>
-      </div>
-    `;
+      clubKeyOutput.value = clubKey;
+      codesOutput.value = codes.join('\n');
+
+      generateResult.innerHTML = `
+        <div class="success">
+          <strong>Generated ${codes.length} member codes</strong>
+          <p>Distribute the club key to verifiers. Each member gets one code from the list below.</p>
+        </div>
+      `;
+
+      simpleCodesOutput.classList.remove('hidden');
+      qrCodesOutput.classList.add('hidden');
+    } else {
+      // QR codes with encrypted names
+      const baseUrl = baseUrlInput.value.trim();
+      const { clubKey, qrCodes } = await generateQRCodesFromCSV(
+        csvContent,
+        adminPassword,
+        clubId,
+        baseUrl
+      );
+
+      clubKeyOutput.value = clubKey;
+      renderQRCodes(qrCodes);
+
+      generateResult.innerHTML = `
+        <div class="success">
+          <strong>Generated ${qrCodes.length} QR codes</strong>
+          <p>Distribute the club key to verifiers. Send each QR code to the respective member.</p>
+        </div>
+      `;
+
+      simpleCodesOutput.classList.add('hidden');
+      qrCodesOutput.classList.remove('hidden');
+    }
+
     generateResult.classList.remove('hidden');
-
     document.getElementById('output-section')?.classList.remove('hidden');
   } catch (err) {
     showError(generateResult, `Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -196,11 +279,17 @@ copyKeyBtn.addEventListener('click', async () => {
   }
 });
 
-// Verify member code
-verifyBtn.addEventListener('click', async () => {
+// Print QR codes
+downloadQrBtn.addEventListener('click', () => {
+  window.print();
+});
+
+// Verify member code (handles both simple codes and QR data)
+async function handleVerification() {
   const clubKeyStr = verifyClubKeyInput.value.trim();
   const clubId = verifyClubIdInput.value.trim().toUpperCase();
   const memberCode = memberCodeInput.value.trim();
+  const qrData = memberCodeInput.dataset.qrData;
 
   // Validation
   if (!clubKeyStr) {
@@ -208,6 +297,37 @@ verifyBtn.addEventListener('click', async () => {
     return;
   }
 
+  // QR code verification
+  if (qrData) {
+    verifyBtn.disabled = true;
+    verifyBtn.textContent = 'Verifying...';
+
+    try {
+      const clubKey = await importClubKey(clubKeyStr);
+      const result = await decryptMemberData(clubKey, qrData);
+
+      if (result.valid && result.name) {
+        // Save the working key for future use
+        saveClubKeyToStorage(clubKeyStr, clubId);
+        showVerifyResult('valid', 'VALID MEMBER', result.name, result.index);
+
+        // Clear the QR data after successful verification
+        delete memberCodeInput.dataset.qrData;
+        memberCodeInput.disabled = false;
+        memberCodeInput.placeholder = '847291';
+      } else {
+        showVerifyResult('invalid', 'INVALID - Could not decrypt QR code');
+      }
+    } catch {
+      showVerifyResult('error', 'Error: Invalid club key format');
+    } finally {
+      verifyBtn.disabled = false;
+      verifyBtn.textContent = 'Verify';
+    }
+    return;
+  }
+
+  // Simple 6-digit code verification
   if (!clubId) {
     showVerifyResult('error', 'Please enter the club ID');
     return;
@@ -233,6 +353,8 @@ verifyBtn.addEventListener('click', async () => {
     const result = await verifyMemberCode(memberCode, clubKey, clubId);
 
     if (result.valid) {
+      // Save the working key for future use
+      saveClubKeyToStorage(clubKeyStr, clubId);
       showVerifyResult('valid', 'VALID MEMBER');
     } else {
       const reasons: Record<string, string> = {
@@ -241,13 +363,15 @@ verifyBtn.addEventListener('click', async () => {
       };
       showVerifyResult('invalid', reasons[result.reason || 'invalid_code']);
     }
-  } catch (err) {
+  } catch {
     showVerifyResult('error', 'Error: Invalid club key format');
   } finally {
     verifyBtn.disabled = false;
     verifyBtn.textContent = 'Verify';
   }
-});
+}
+
+verifyBtn.addEventListener('click', handleVerification);
 
 // Clear result when inputs change
 memberCodeInput.addEventListener('input', () => {
@@ -260,8 +384,113 @@ function showError(element: HTMLElement, message: string) {
   element.classList.remove('hidden');
 }
 
-function showVerifyResult(type: 'valid' | 'invalid' | 'error', message: string) {
+function showVerifyResult(type: 'valid' | 'invalid' | 'error', message: string, memberName?: string, memberIndex?: number) {
   verifyResult.className = `result ${type}`;
-  verifyResult.textContent = message;
+
+  if (type === 'valid' && memberName) {
+    verifyResult.innerHTML = `
+      <div>VALID MEMBER</div>
+      <div class="member-name">${memberName}</div>
+      ${memberIndex ? `<div class="member-index">#${memberIndex}</div>` : ''}
+    `;
+  } else {
+    verifyResult.textContent = message;
+  }
+
   verifyResult.classList.remove('hidden');
 }
+
+// Save club key to localStorage
+function saveClubKeyToStorage(key: string, clubId: string) {
+  try {
+    localStorage.setItem(STORAGE_CLUB_KEY, key);
+    localStorage.setItem(STORAGE_CLUB_ID, clubId);
+  } catch {
+    // Storage might be unavailable
+  }
+}
+
+// Load club key from localStorage
+function loadClubKeyFromStorage(): { key: string; clubId: string } | null {
+  try {
+    const key = localStorage.getItem(STORAGE_CLUB_KEY);
+    const clubId = localStorage.getItem(STORAGE_CLUB_ID);
+    if (key && clubId) {
+      return { key, clubId };
+    }
+  } catch {
+    // Storage might be unavailable
+  }
+  return null;
+}
+
+// Handle QR code verification from URL
+async function handleQRVerification(encryptedData: string) {
+  // Switch to verify tab
+  tabVerify.click();
+
+  // Load stored club key or prompt for it
+  const stored = loadClubKeyFromStorage();
+  if (stored) {
+    verifyClubKeyInput.value = stored.key;
+    verifyClubIdInput.value = stored.clubId;
+  }
+
+  // Show special QR verification UI
+  memberCodeInput.value = '';
+  memberCodeInput.placeholder = 'QR code detected...';
+  memberCodeInput.disabled = true;
+
+  // If we have a stored key, try to verify immediately
+  if (stored) {
+    try {
+      const clubKey = await importClubKey(stored.key);
+      const result = await decryptMemberData(clubKey, encryptedData);
+
+      if (result.valid && result.name) {
+        showVerifyResult('valid', 'VALID MEMBER', result.name, result.index);
+      } else {
+        showVerifyResult('invalid', 'INVALID - Could not decrypt QR code');
+      }
+    } catch {
+      showVerifyResult('error', 'Error: Invalid club key');
+    }
+  } else {
+    // No stored key - ask user to enter it
+    showVerifyResult('error', 'Please enter the club key and click Verify');
+    memberCodeInput.placeholder = 'QR verification pending...';
+
+    // Store encrypted data for manual verification
+    memberCodeInput.dataset.qrData = encryptedData;
+  }
+}
+
+// Check for ?verify= parameter on page load
+function checkVerifyParameter() {
+  const params = new URLSearchParams(window.location.search);
+  const verifyData = params.get('verify');
+
+  if (verifyData) {
+    // Remove the parameter from URL to allow page refresh
+    const newUrl = window.location.pathname;
+    window.history.replaceState({}, '', newUrl);
+
+    handleQRVerification(verifyData);
+  }
+}
+
+// Initialize: check URL parameters and load stored values
+function init() {
+  // Load stored club key into verify form
+  const stored = loadClubKeyFromStorage();
+  if (stored) {
+    verifyClubKeyInput.value = stored.key;
+    verifyClubIdInput.value = stored.clubId;
+  }
+
+  // Check for QR verification parameter
+  checkVerifyParameter();
+}
+
+// Run init when DOM is ready
+init();
