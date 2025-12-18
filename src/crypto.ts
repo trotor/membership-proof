@@ -292,17 +292,15 @@ export function parseCSV(content: string): string[][] {
   });
 }
 
-// Generate unique codes for multiple members
-export async function generateCodesFromCSV(
-  csvContent: string,
+// Generate unique codes by count (for simple 6-digit system)
+export async function generateCodesByCount(
+  count: number,
   adminPassword: string,
-  clubId: string,
-  expiryDate: Date | null
+  clubId: string
 ): Promise<{ clubKey: string; codes: string[] }> {
-  const rows = parseCSV(csvContent);
-
-  const startIndex = rows.length > 0 &&
-    rows[0].some(cell => /^(name|member|id|email)/i.test(cell)) ? 1 : 0;
+  if (count < 1 || count > 1000) {
+    throw new Error('Count must be between 1 and 1000');
+  }
 
   const clubKey = await deriveClubKey(adminPassword, clubId);
   const exportedKey = await exportClubKey(clubKey);
@@ -310,26 +308,24 @@ export async function generateCodesFromCSV(
   const codes: string[] = [];
   const usedIdentifiers = new Set<number>();
 
-  for (let i = startIndex; i < rows.length; i++) {
-    if (rows[i].length > 0 && rows[i][0]) {
-      // Generate unique identifier
-      let identifier: number;
-      let attempts = 0;
-      do {
-        identifier = Math.floor(Math.random() * 1000);
-        attempts++;
-        if (attempts > 2000) {
-          throw new Error('Too many members - maximum 1000 codes per club');
-        }
-      } while (usedIdentifiers.has(identifier));
+  for (let i = 0; i < count; i++) {
+    // Generate unique identifier
+    let identifier: number;
+    let attempts = 0;
+    do {
+      identifier = Math.floor(Math.random() * 1000);
+      attempts++;
+      if (attempts > 2000) {
+        throw new Error('Too many codes - maximum 1000 per club');
+      }
+    } while (usedIdentifiers.has(identifier));
 
-      usedIdentifiers.add(identifier);
+    usedIdentifiers.add(identifier);
 
-      // Compute signature
-      const sig = await computeSignature(clubKey, clubId, identifier);
-      const code = identifier.toString().padStart(3, '0') + sig.toString().padStart(3, '0');
-      codes.push(code);
-    }
+    // Compute signature
+    const sig = await computeSignature(clubKey, clubId, identifier);
+    const code = identifier.toString().padStart(3, '0') + sig.toString().padStart(3, '0');
+    codes.push(code);
   }
 
   return { clubKey: exportedKey, codes };

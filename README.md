@@ -1,160 +1,141 @@
 # Membership Proof
 
-Yksinkertainen ja yksityisyyttä kunnioittava jäsenyyden todentamisjärjestelmä urheiluseuroille ja yhdistyksille.
+Privacy-preserving membership verification for sports clubs and non-profits.
 
-## Mikä tämä on?
+**[Try the live demo](https://trotor.github.io/membership-proof/)**
 
-Järjestelmä, jolla seura voi todentaa jäsenyyden **ilman henkilötietojen käsittelyä**. Jokainen jäsen saa 6-numeroisen koodin (esim. `847291`), jonka voi muistaa ulkoa. Tarkistaja näkee vain "JÄSEN" tai "EI JÄSEN" – ei nimiä, ei henkilötietoja.
+## Overview
 
-**Kenelle sopii:**
-- Urheiluseurat (harjoituksiin sisäänkirjautuminen)
-- Yhdistykset (tapahtumien kulunvalvonta)
-- Kerhot (jäsenetujen tarkistus)
+Membership Proof lets organizations verify that someone is a member without storing or transmitting personal data. All processing happens client-side in the browser.
 
-## Miten toimii?
+### Two Code Systems
 
-### Vaihe 1: Koodien luonti (seuran ylläpitäjä)
+| System | Best For | How It Works |
+|--------|----------|--------------|
+| **Simple 6-digit codes** | Quick verification, no names needed | Specify count, get codes, distribute to members |
+| **QR codes with names** | Need to see member name on verification | Upload surname list, get QR codes, scan reveals name |
 
-1. Valmistele CSV-tiedosto jäsennimillä (yksi nimi per rivi)
-2. Avaa sovellus ja valitse "Generate Codes"
-3. Syötä:
-   - **Club ID**: Seuran tunniste, esim. `URHEILUSEURA-2025`
-   - **Admin Password**: Salainen salasana (vähintään 8 merkkiä)
-4. Raahaa CSV-tiedosto lomakkeelle
-5. Klikkaa "Generate Member Codes"
+## Quick Start
 
-**Tuloksena saat:**
-- **Club Key**: Pitkä avain, joka jaetaan tarkistajille
-- **Jäsenkoodit**: Lista 6-numeroisia koodeja, yksi per jäsen
+### For Administrators (Generating Codes)
 
-### Vaihe 2: Koodien jakelu
+**Simple 6-digit codes:**
+1. Enter a Club ID (e.g., `SWIM-CLUB-2024`)
+2. Enter an Admin Password (keep this secret!)
+3. Specify how many codes you need
+4. Click "Generate Codes"
+5. Share the **Club Key** with verifiers (coaches, officials)
+6. Distribute one code to each member
 
-| Kenelle | Mitä jaetaan | Esimerkki |
-|---------|--------------|-----------|
-| Valmentajat/tarkistajat | Club Key + Club ID | `vD8kL2...` + `URHEILUSEURA-2025` |
-| Jäsenet | 6-numeroinen koodi | `847291` |
+**QR codes with names:**
+1. Prepare a CSV file with member surnames (one per line)
+2. Select "QR codes with names"
+3. Enter Club ID and Admin Password
+4. Upload the CSV file
+5. Share the **Club Key** with verifiers
+6. Send each QR code to the respective member
 
-### Vaihe 3: Tarkistus (valmentaja/ovimies)
+### For Verifiers (Checking Membership)
 
-1. Avaa sovellus ja valitse "Verify Member"
-2. Syötä Club Key ja Club ID (voi tallentaa selaimen muistiin)
-3. Jäsen sanoo koodinsa: "kahdeksan neljä seitsemän kaksi yhdeksän yksi"
-4. Syötä koodi → näet VALID MEMBER tai INVALID
+**Simple codes:**
+1. Enter the Club Key and Club ID
+2. Ask member for their 6-digit code
+3. Click "Verify" - shows VALID or INVALID
 
-## Esimerkki käytännössä
+**QR codes:**
+1. First time: Enter the Club Key (saved automatically)
+2. Scan member's QR code with phone camera
+3. Page opens and shows: `VALID MEMBER: LASTNAME`
 
-**Tilanne:** Uimaseuran harjoitukset alkavat. Valmentaja tarkistaa jäsenyydet ovella.
+## How It Works
 
-```
-Valmentaja: "Jäsenkoodi?"
-Uimari: "Neljä viisi kuusi kolme kaksi yksi"
-Valmentaja: [syöttää 456321] → "VALID MEMBER" ✓
-Valmentaja: "Tervetuloa harjoituksiin!"
-```
-
-**Toinen tilanne:** Henkilö yrittää päästä sisään ilman jäsenyyttä.
+### Simple 6-Digit Codes
 
 ```
-Valmentaja: "Jäsenkoodi?"
-Henkilö: "Öö... 123456?"
-Valmentaja: [syöttää 123456] → "INVALID" ✗
-Valmentaja: "Koodi ei kelpaa. Oletko jäsen?"
+Code format: RRRSSS (e.g., 847291)
+  RRR: Random identifier (000-999)
+  SSS: HMAC signature mod 1000
+
+Verification: HMAC(club_key, club_id + identifier) mod 1000 == signature
 ```
 
-## Koodin rakenne
+- Maximum 1000 unique codes per Club ID
+- Forgery probability: 0.1% per attempt
+- No personal data in the code
 
-Jäsenkoodi on **6 numeroa**, esim. `847291`:
+### QR Codes with Names
 
 ```
-847 291
- │   │
- │   └── Kryptografinen allekirjoitus (lasketaan avaimella)
- └────── Satunnainen tunniste (000-999)
+QR contains URL: https://your-site.com/?verify=ENCRYPTED_DATA
+
+ENCRYPTED_DATA = AES-GCM(club_key, {name: "LASTNAME", index: 5})
 ```
 
-Koodi on sidottu seuran avaimeen. Sama koodi ei toimi toisessa seurassa.
+- Name is encrypted with the club key
+- Only someone with the club key can decrypt
+- Scanning opens the verification page automatically
 
-## Tietoturva ja GDPR
+## Security
 
-### Miksi tämä on GDPR-yhteensopiva?
+| Feature | Implementation |
+|---------|----------------|
+| Key derivation | PBKDF2 with 100,000 iterations |
+| Code signing | HMAC-SHA256 |
+| Name encryption | AES-256-GCM |
+| Data storage | None - all client-side |
 
-| Vaatimus | Miten toteutettu |
-|----------|------------------|
-| **Tietojen minimointi** | Tarkistuksessa ei käsitellä henkilötietoja |
-| **Käyttötarkoitussidonnaisuus** | Koodi todistaa vain jäsenyyden |
-| **Säilytyksen rajoittaminen** | CSV käsitellään vain muistissa, ei tallenneta |
+### Trade-offs
 
-**6-numeroinen koodi EI ole henkilötieto koska:**
-- Se ei sisällä tunnistetietoja
-- Sitä ei voi yhdistää henkilöön ilman erillistä rekisteriä
-- Seura ei voi selvittää koodin haltijaa
+This system prioritizes **usability over maximum security**:
 
-### Turvallisuus
+- 6-digit codes are easy to remember but have 0.1% forgery probability
+- Suitable for sports clubs and community organizations
+- Not recommended for high-security applications
+- Regenerate codes annually by changing the admin password
 
-- **Väärennysriski ilman avainta:** 0.1% per yritys
-- **Koodit sidottu seuraan:** Väärä Club ID → koodi ei toimi
-- **Vuosittainen uusiminen:** Vaihda salasana → uudet koodit
+## Self-Hosting
 
-### Rajoitukset
+### GitHub Pages
 
-- Maksimi 1000 jäsentä per Club ID
-- Isommille seuroille: käytä useita ID:itä (`SEURA-A`, `SEURA-B`)
-- Ei sovi korkean turvallisuuden sovelluksiin (pankit, terveydenhuolto)
+1. Fork this repository
+2. Enable GitHub Pages in Settings - Pages - Source: GitHub Actions
+3. Update `base` in `vite.config.ts` to match your repo name
+4. Push changes - automatic deployment via GitHub Actions
 
-## Asennus ja käyttö
-
-### Verkkosivuna (GitHub Pages)
-
-Sovellus toimii suoraan selaimessa: **[trotor.github.io/membership-proof](https://trotor.github.io/membership-proof/)**
-
-### Paikallisesti
+### Other Hosting
 
 ```bash
-git clone https://github.com/trotor/membership-proof.git
-cd membership-proof
 npm install
-npm run dev
+npm run build
+# Deploy contents of dist/ folder
 ```
 
-Avaa `http://localhost:5173` selaimessa.
-
-### Tuotantoversio
+## Development
 
 ```bash
-npm run build
+npm install          # Install dependencies
+npm run dev          # Start dev server
+npm run build        # Build for production
+npm run typecheck    # Run TypeScript checks
 ```
 
-Staattiset tiedostot `dist/`-kansiossa. Voit kopioida ne mille tahansa web-palvelimelle.
+## FAQ
 
-## Usein kysytyt kysymykset
+**Q: What if a member forgets their code?**
+A: Generate new codes with the same password and distribute a new one.
 
-**K: Mitä jos jäsen unohtaa koodinsa?**
-V: Generoi uudet koodit samalla salasanalla ja jaa uusi koodi.
+**Q: Can the verifier identify a member from the code?**
+A: No. Simple codes are just cryptographic proofs, not identifiers.
 
-**K: Voiko tarkistaja tunnistaa jäsenen koodista?**
-V: Ei. Koodi on vain kryptografinen todiste, ei tunniste.
+**Q: How often should codes be renewed?**
+A: Annually recommended. Change the admin password at the start of each season.
 
-**K: Kuinka usein koodit pitää uusia?**
-V: Suositus: vuosittain. Vaihda admin-salasana uuden kauden alussa.
+**Q: What if we have more than 1000 members?**
+A: Use multiple Club IDs, e.g., `CLUB-ADULTS` and `CLUB-JUNIORS`.
 
-**K: Entä jos meillä on yli 1000 jäsentä?**
-V: Käytä useita Club ID:itä, esim. `SEURA-AIKUISET` ja `SEURA-JUNIORIT`.
+**Q: Does it work offline?**
+A: Yes, once the page is loaded. All computation happens in the browser.
 
-**K: Toimiiko ilman nettiyhteyttä?**
-V: Kyllä, kun sivu on kerran ladattu. Kaikki laskenta tapahtuu selaimessa.
+## License
 
-## Tekniset tiedot
-
-- **Avainten johtaminen:** PBKDF2-SHA256 (100 000 iteraatiota)
-- **Allekirjoitus:** HMAC-SHA256, katkaistuna 3 numeroon
-- **Toteutus:** TypeScript, Vite, Web Crypto API
-- **Palvelinriippuvuudet:** Ei mitään – 100% selainpohjainen
-
-## Lisenssi
-
-MIT License
-
-## Tekijä
-
-**Tero Rönkkö**
-- GitHub: [github.com/trotor](https://github.com/trotor)
+MIT

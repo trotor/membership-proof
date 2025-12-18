@@ -4,7 +4,7 @@
  */
 
 import {
-  generateCodesFromCSV,
+  generateCodesByCount,
   generateQRCodesFromCSV,
   importClubKey,
   verifyMemberCode,
@@ -17,6 +17,163 @@ import {
 // Storage keys
 const STORAGE_CLUB_KEY = 'membership-proof-club-key';
 const STORAGE_CLUB_ID = 'membership-proof-club-id';
+const STORAGE_LANG = 'membership-proof-lang';
+
+// Translations
+const translations: Record<string, Record<string, string>> = {
+  en: {
+    title: 'Membership Proof',
+    subtitle: 'Privacy-preserving membership verification',
+    tab_generate: 'Generate Codes',
+    tab_verify: 'Verify Member',
+    code_system: 'Code System',
+    simple_codes_title: 'Simple 6-digit codes',
+    simple_codes_desc: 'Easy to remember, just specify how many codes you need',
+    qr_codes_title: 'QR codes with names',
+    qr_codes_desc: 'Upload member list, QR reveals name when scanned',
+    code_count: 'Number of Codes',
+    code_count_hint: 'How many member codes to generate (max 1000)',
+    member_list: 'Member List (CSV)',
+    drop_zone_text: 'Drag & drop CSV file here',
+    drop_zone_or: 'or',
+    drop_zone_browse: 'click to browse',
+    csv_hint: 'First column should contain surnames. Data is processed locally.',
+    base_url: 'Verification URL Base',
+    base_url_hint: 'The URL where your app is hosted (auto-filled)',
+    club_id: 'Club ID',
+    club_id_hint: 'Short identifier for your club (letters, numbers, hyphens)',
+    admin_password: 'Admin Password',
+    admin_password_hint: 'Keep this secret. Same password regenerates the same club key.',
+    generate_btn: 'Generate Codes',
+    club_key: 'Club Verification Key',
+    copy_key: 'Copy Key',
+    club_key_hint: 'Share this key with verifiers (trainers, officials)',
+    member_codes: 'Member Codes',
+    download_csv: 'Download CSV',
+    codes_hint: 'Give one code to each member. Codes contain no personal data.',
+    qr_codes: 'QR Codes',
+    print_all: 'Print All',
+    qr_hint: 'Each QR contains encrypted member name. Send individually to members.',
+    verify_club_key: 'Club Verification Key',
+    verify_club_id: 'Club ID',
+    member_code: 'Member Code',
+    member_code_hint: 'Enter the 6-digit code',
+    verify_btn: 'Verify',
+    privacy_title: 'Privacy by Design',
+    privacy_text: 'All processing happens in your browser. No data is sent to any server. Member codes contain no personal information - they are cryptographic proofs only.',
+    lang_toggle: 'Suomeksi',
+    generated_codes: 'Generated {count} member codes',
+    generated_qr: 'Generated {count} QR codes',
+    distribute_key: 'Share the club key with verifiers. Give one code to each member.',
+    distribute_qr: 'Share the club key with verifiers. Send each QR to the respective member.',
+    valid_member: 'VALID MEMBER',
+    invalid_format: 'INVALID - Incorrect code format',
+    invalid_code: 'INVALID - Code not recognized',
+    invalid_qr: 'INVALID - Could not decrypt QR code',
+    error_key: 'Error: Invalid club key format',
+    error_select_csv: 'Please select a CSV file',
+    error_club_id: 'Please enter a club ID (at least 2 characters)',
+    error_club_id_format: 'Club ID can only contain letters, numbers, and hyphens',
+    error_password: 'Admin password must be at least 8 characters',
+    error_base_url: 'Please enter the verification URL base',
+    error_count: 'Please enter a valid number of codes (1-1000)',
+    error_enter_key: 'Please enter the club verification key',
+    error_enter_club_id: 'Please enter the club ID',
+    error_enter_code: 'Please enter the member code',
+    copied: 'Copied!',
+    generating: 'Generating...',
+    verifying: 'Verifying...',
+  },
+  fi: {
+    title: 'Jäsenyyden todentaminen',
+    subtitle: 'Yksityisyyttä suojaava jäsenyyden varmistus',
+    tab_generate: 'Luo koodeja',
+    tab_verify: 'Tarkista jäsen',
+    code_system: 'Koodijärjestelmä',
+    simple_codes_title: 'Yksinkertaiset 6-numeroiset koodit',
+    simple_codes_desc: 'Helppo muistaa, määritä vain koodien lukumäärä',
+    qr_codes_title: 'QR-koodit nimillä',
+    qr_codes_desc: 'Lataa jäsenlista, QR näyttää nimen skannattaessa',
+    code_count: 'Koodien määrä',
+    code_count_hint: 'Kuinka monta jäsenkoodia luodaan (max 1000)',
+    member_list: 'Jäsenlista (CSV)',
+    drop_zone_text: 'Vedä ja pudota CSV-tiedosto tähän',
+    drop_zone_or: 'tai',
+    drop_zone_browse: 'klikkaa selataksesi',
+    csv_hint: 'Ensimmäisen sarakkeen tulee sisältää sukunimet. Data käsitellään paikallisesti.',
+    base_url: 'Varmistus-URL:n pohja',
+    base_url_hint: 'URL jossa sovellus on julkaistu (täytetään automaattisesti)',
+    club_id: 'Seuran tunnus',
+    club_id_hint: 'Lyhyt tunniste seurallesi (kirjaimia, numeroita, väliviivoja)',
+    admin_password: 'Ylläpitäjän salasana',
+    admin_password_hint: 'Pidä salassa. Sama salasana tuottaa saman seuran avaimen.',
+    generate_btn: 'Luo koodit',
+    club_key: 'Seuran varmistusavain',
+    copy_key: 'Kopioi avain',
+    club_key_hint: 'Jaa tämä avain varmistajille (valmentajat, tuomarit)',
+    member_codes: 'Jäsenkoodit',
+    download_csv: 'Lataa CSV',
+    codes_hint: 'Anna yksi koodi jokaiselle jäsenelle. Koodit eivät sisällä henkilötietoja.',
+    qr_codes: 'QR-koodit',
+    print_all: 'Tulosta kaikki',
+    qr_hint: 'Jokainen QR sisältää salatun jäsenen nimen. Lähetä erikseen jäsenille.',
+    verify_club_key: 'Seuran varmistusavain',
+    verify_club_id: 'Seuran tunnus',
+    member_code: 'Jäsenkoodi',
+    member_code_hint: 'Syötä 6-numeroinen koodi',
+    verify_btn: 'Varmista',
+    privacy_title: 'Yksityisyys sisäänrakennettuna',
+    privacy_text: 'Kaikki käsittely tapahtuu selaimessasi. Mitään dataa ei lähetetä palvelimelle. Jäsenkoodit eivät sisällä henkilötietoja - ne ovat vain kryptografisia todisteita.',
+    lang_toggle: 'In English',
+    generated_codes: 'Luotiin {count} jäsenkoodia',
+    generated_qr: 'Luotiin {count} QR-koodia',
+    distribute_key: 'Jaa seuran avain varmistajille. Anna yksi koodi jokaiselle jäsenelle.',
+    distribute_qr: 'Jaa seuran avain varmistajille. Lähetä jokainen QR vastaavalle jäsenelle.',
+    valid_member: 'VOIMASSA OLEVA JÄSEN',
+    invalid_format: 'VIRHEELLINEN - Väärä koodimuoto',
+    invalid_code: 'VIRHEELLINEN - Koodia ei tunnistettu',
+    invalid_qr: 'VIRHEELLINEN - QR-koodia ei voitu purkaa',
+    error_key: 'Virhe: Virheellinen avainmuoto',
+    error_select_csv: 'Valitse CSV-tiedosto',
+    error_club_id: 'Syötä seuran tunnus (vähintään 2 merkkiä)',
+    error_club_id_format: 'Seuran tunnus voi sisältää vain kirjaimia, numeroita ja väliviivoja',
+    error_password: 'Salasanan tulee olla vähintään 8 merkkiä',
+    error_base_url: 'Syötä varmistus-URL:n pohja',
+    error_count: 'Syötä kelvollinen koodien määrä (1-1000)',
+    error_enter_key: 'Syötä seuran varmistusavain',
+    error_enter_club_id: 'Syötä seuran tunnus',
+    error_enter_code: 'Syötä jäsenkoodi',
+    copied: 'Kopioitu!',
+    generating: 'Luodaan...',
+    verifying: 'Varmistetaan...',
+  }
+};
+
+let currentLang = localStorage.getItem(STORAGE_LANG) || 'en';
+
+function t(key: string, replacements?: Record<string, string | number>): string {
+  let text = translations[currentLang]?.[key] || translations['en'][key] || key;
+  if (replacements) {
+    Object.entries(replacements).forEach(([k, v]) => {
+      text = text.replace(`{${k}}`, String(v));
+    });
+  }
+  return text;
+}
+
+function updateLanguage() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (key) {
+      el.textContent = t(key);
+    }
+  });
+
+  const langToggle = document.getElementById('lang-toggle');
+  if (langToggle) {
+    langToggle.textContent = t('lang_toggle');
+  }
+}
 
 // DOM Elements
 const tabGenerate = document.getElementById('tab-generate') as HTMLButtonElement;
@@ -28,6 +185,7 @@ const verifySection = document.getElementById('verify-section') as HTMLElement;
 const dropZone = document.getElementById('drop-zone') as HTMLElement;
 const csvFileInput = document.getElementById('csv-file') as HTMLInputElement;
 const fileNameDisplay = document.getElementById('file-name') as HTMLElement;
+const codeCountInput = document.getElementById('code-count') as HTMLInputElement;
 const clubIdInput = document.getElementById('club-id') as HTMLInputElement;
 const adminPasswordInput = document.getElementById('admin-password') as HTMLInputElement;
 const generateBtn = document.getElementById('generate-btn') as HTMLButtonElement;
@@ -39,7 +197,8 @@ const copyKeyBtn = document.getElementById('copy-key-btn') as HTMLButtonElement;
 
 // Code system elements
 const codeSystemRadios = document.querySelectorAll('input[name="code-system"]') as NodeListOf<HTMLInputElement>;
-const baseUrlGroup = document.getElementById('base-url-group') as HTMLElement;
+const simpleInputs = document.getElementById('simple-inputs') as HTMLElement;
+const qrInputs = document.getElementById('qr-inputs') as HTMLElement;
 const baseUrlInput = document.getElementById('base-url') as HTMLInputElement;
 const simpleCodesOutput = document.getElementById('simple-codes-output') as HTMLElement;
 const qrCodesOutput = document.getElementById('qr-codes-output') as HTMLElement;
@@ -52,6 +211,14 @@ const verifyClubIdInput = document.getElementById('verify-club-id') as HTMLInput
 const memberCodeInput = document.getElementById('member-code') as HTMLInputElement;
 const verifyBtn = document.getElementById('verify-btn') as HTMLButtonElement;
 const verifyResult = document.getElementById('verify-result') as HTMLElement;
+
+// Language toggle
+const langToggle = document.getElementById('lang-toggle') as HTMLButtonElement;
+langToggle.addEventListener('click', () => {
+  currentLang = currentLang === 'en' ? 'fi' : 'en';
+  localStorage.setItem(STORAGE_LANG, currentLang);
+  updateLanguage();
+});
 
 // Tab switching
 tabGenerate.addEventListener('click', () => {
@@ -79,11 +246,16 @@ function getSelectedCodeSystem(): CodeSystem {
 codeSystemRadios.forEach(radio => {
   radio.addEventListener('change', () => {
     const system = getSelectedCodeSystem();
-    baseUrlGroup.style.display = system === 'qr' ? 'block' : 'none';
-
-    // Auto-fill base URL with current location
-    if (system === 'qr' && !baseUrlInput.value) {
-      baseUrlInput.value = window.location.origin + window.location.pathname.replace(/\/$/, '');
+    if (system === 'simple') {
+      simpleInputs.classList.remove('hidden');
+      qrInputs.classList.add('hidden');
+    } else {
+      simpleInputs.classList.add('hidden');
+      qrInputs.classList.remove('hidden');
+      // Auto-fill base URL
+      if (!baseUrlInput.value) {
+        baseUrlInput.value = window.location.origin + window.location.pathname.replace(/\/$/, '');
+      }
     }
   });
 });
@@ -150,66 +322,78 @@ function renderQRCodes(qrCodes: QRCodeResult[]) {
 
 // Generate codes
 generateBtn.addEventListener('click', async () => {
-  const file = csvFileInput.files?.[0];
   const clubId = clubIdInput.value.trim().toUpperCase();
   const adminPassword = adminPasswordInput.value;
   const codeSystem = getSelectedCodeSystem();
 
-  // Validation
-  if (!file) {
-    showError(generateResult, 'Please select a CSV file');
-    return;
-  }
-
+  // Common validation
   if (!clubId || clubId.length < 2) {
-    showError(generateResult, 'Please enter a club ID (at least 2 characters)');
+    showError(generateResult, t('error_club_id'));
     return;
   }
 
   if (!/^[A-Z0-9-]+$/.test(clubId)) {
-    showError(generateResult, 'Club ID can only contain letters, numbers, and hyphens');
+    showError(generateResult, t('error_club_id_format'));
     return;
   }
 
   if (!adminPassword || adminPassword.length < 8) {
-    showError(generateResult, 'Admin password must be at least 8 characters');
+    showError(generateResult, t('error_password'));
     return;
   }
 
-  if (codeSystem === 'qr' && !baseUrlInput.value.trim()) {
-    showError(generateResult, 'Please enter the verification URL base for QR codes');
-    return;
-  }
+  if (codeSystem === 'simple') {
+    // Simple code validation
+    const count = parseInt(codeCountInput.value, 10);
+    if (isNaN(count) || count < 1 || count > 1000) {
+      showError(generateResult, t('error_count'));
+      return;
+    }
 
-  generateBtn.disabled = true;
-  generateBtn.textContent = 'Generating...';
+    generateBtn.disabled = true;
+    generateBtn.textContent = t('generating');
 
-  try {
-    const csvContent = await file.text();
-
-    if (codeSystem === 'simple') {
-      // Simple 6-digit codes
-      const { clubKey, codes } = await generateCodesFromCSV(
-        csvContent,
-        adminPassword,
-        clubId,
-        null
-      );
+    try {
+      const { clubKey, codes } = await generateCodesByCount(count, adminPassword, clubId);
 
       clubKeyOutput.value = clubKey;
       codesOutput.value = codes.join('\n');
 
       generateResult.innerHTML = `
         <div class="success">
-          <strong>Generated ${codes.length} member codes</strong>
-          <p>Distribute the club key to verifiers. Each member gets one code from the list below.</p>
+          <strong>${t('generated_codes', { count: codes.length })}</strong>
+          <p>${t('distribute_key')}</p>
         </div>
       `;
 
       simpleCodesOutput.classList.remove('hidden');
       qrCodesOutput.classList.add('hidden');
-    } else {
-      // QR codes with encrypted names
+      generateResult.classList.remove('hidden');
+      document.getElementById('output-section')?.classList.remove('hidden');
+    } catch (err) {
+      showError(generateResult, `Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      generateBtn.disabled = false;
+      generateBtn.textContent = t('generate_btn');
+    }
+  } else {
+    // QR code validation
+    const file = csvFileInput.files?.[0];
+    if (!file) {
+      showError(generateResult, t('error_select_csv'));
+      return;
+    }
+
+    if (!baseUrlInput.value.trim()) {
+      showError(generateResult, t('error_base_url'));
+      return;
+    }
+
+    generateBtn.disabled = true;
+    generateBtn.textContent = t('generating');
+
+    try {
+      const csvContent = await file.text();
       const baseUrl = baseUrlInput.value.trim();
       const { clubKey, qrCodes } = await generateQRCodesFromCSV(
         csvContent,
@@ -223,22 +407,21 @@ generateBtn.addEventListener('click', async () => {
 
       generateResult.innerHTML = `
         <div class="success">
-          <strong>Generated ${qrCodes.length} QR codes</strong>
-          <p>Distribute the club key to verifiers. Send each QR code to the respective member.</p>
+          <strong>${t('generated_qr', { count: qrCodes.length })}</strong>
+          <p>${t('distribute_qr')}</p>
         </div>
       `;
 
       simpleCodesOutput.classList.add('hidden');
       qrCodesOutput.classList.remove('hidden');
+      generateResult.classList.remove('hidden');
+      document.getElementById('output-section')?.classList.remove('hidden');
+    } catch (err) {
+      showError(generateResult, `Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      generateBtn.disabled = false;
+      generateBtn.textContent = t('generate_btn');
     }
-
-    generateResult.classList.remove('hidden');
-    document.getElementById('output-section')?.classList.remove('hidden');
-  } catch (err) {
-    showError(generateResult, `Error: ${err instanceof Error ? err.message : 'Unknown error'}`);
-  } finally {
-    generateBtn.disabled = false;
-    generateBtn.textContent = 'Generate Member Codes';
   }
 });
 
@@ -264,17 +447,16 @@ copyKeyBtn.addEventListener('click', async () => {
 
   try {
     await navigator.clipboard.writeText(key);
-    copyKeyBtn.textContent = 'Copied!';
+    copyKeyBtn.textContent = t('copied');
     setTimeout(() => {
-      copyKeyBtn.textContent = 'Copy Key';
+      copyKeyBtn.textContent = t('copy_key');
     }, 2000);
   } catch {
-    // Fallback for older browsers
     clubKeyOutput.select();
     document.execCommand('copy');
-    copyKeyBtn.textContent = 'Copied!';
+    copyKeyBtn.textContent = t('copied');
     setTimeout(() => {
-      copyKeyBtn.textContent = 'Copy Key';
+      copyKeyBtn.textContent = t('copy_key');
     }, 2000);
   }
 });
@@ -293,81 +475,73 @@ async function handleVerification() {
 
   // Validation
   if (!clubKeyStr) {
-    showVerifyResult('error', 'Please enter the club verification key');
+    showVerifyResult('error', t('error_enter_key'));
     return;
   }
 
   // QR code verification
   if (qrData) {
     verifyBtn.disabled = true;
-    verifyBtn.textContent = 'Verifying...';
+    verifyBtn.textContent = t('verifying');
 
     try {
       const clubKey = await importClubKey(clubKeyStr);
       const result = await decryptMemberData(clubKey, qrData);
 
       if (result.valid && result.name) {
-        // Save the working key for future use
         saveClubKeyToStorage(clubKeyStr, clubId);
-        showVerifyResult('valid', 'VALID MEMBER', result.name, result.index);
+        showVerifyResult('valid', t('valid_member'), result.name, result.index);
 
-        // Clear the QR data after successful verification
         delete memberCodeInput.dataset.qrData;
         memberCodeInput.disabled = false;
         memberCodeInput.placeholder = '847291';
       } else {
-        showVerifyResult('invalid', 'INVALID - Could not decrypt QR code');
+        showVerifyResult('invalid', t('invalid_qr'));
       }
     } catch {
-      showVerifyResult('error', 'Error: Invalid club key format');
+      showVerifyResult('error', t('error_key'));
     } finally {
       verifyBtn.disabled = false;
-      verifyBtn.textContent = 'Verify';
+      verifyBtn.textContent = t('verify_btn');
     }
     return;
   }
 
   // Simple 6-digit code verification
   if (!clubId) {
-    showVerifyResult('error', 'Please enter the club ID');
+    showVerifyResult('error', t('error_enter_club_id'));
     return;
   }
 
   if (!memberCode) {
-    showVerifyResult('error', 'Please enter the member code');
+    showVerifyResult('error', t('error_enter_code'));
     return;
   }
 
-  // Quick format check
   const parsed = parseMemberCode(memberCode);
   if (!parsed) {
-    showVerifyResult('invalid', 'INVALID - Incorrect code format');
+    showVerifyResult('invalid', t('invalid_format'));
     return;
   }
 
   verifyBtn.disabled = true;
-  verifyBtn.textContent = 'Verifying...';
+  verifyBtn.textContent = t('verifying');
 
   try {
     const clubKey = await importClubKey(clubKeyStr);
     const result = await verifyMemberCode(memberCode, clubKey, clubId);
 
     if (result.valid) {
-      // Save the working key for future use
       saveClubKeyToStorage(clubKeyStr, clubId);
-      showVerifyResult('valid', 'VALID MEMBER');
+      showVerifyResult('valid', t('valid_member'));
     } else {
-      const reasons: Record<string, string> = {
-        invalid_format: 'INVALID - Code must be 6 digits',
-        invalid_code: 'INVALID - Code not recognized',
-      };
-      showVerifyResult('invalid', reasons[result.reason || 'invalid_code']);
+      showVerifyResult('invalid', t('invalid_code'));
     }
   } catch {
-    showVerifyResult('error', 'Error: Invalid club key format');
+    showVerifyResult('error', t('error_key'));
   } finally {
     verifyBtn.disabled = false;
-    verifyBtn.textContent = 'Verify';
+    verifyBtn.textContent = t('verify_btn');
   }
 }
 
@@ -389,7 +563,7 @@ function showVerifyResult(type: 'valid' | 'invalid' | 'error', message: string, 
 
   if (type === 'valid' && memberName) {
     verifyResult.innerHTML = `
-      <div>VALID MEMBER</div>
+      <div>${message}</div>
       <div class="member-name">${memberName}</div>
       ${memberIndex ? `<div class="member-index">#${memberIndex}</div>` : ''}
     `;
@@ -426,41 +600,33 @@ function loadClubKeyFromStorage(): { key: string; clubId: string } | null {
 
 // Handle QR code verification from URL
 async function handleQRVerification(encryptedData: string) {
-  // Switch to verify tab
   tabVerify.click();
 
-  // Load stored club key or prompt for it
   const stored = loadClubKeyFromStorage();
   if (stored) {
     verifyClubKeyInput.value = stored.key;
     verifyClubIdInput.value = stored.clubId;
   }
 
-  // Show special QR verification UI
   memberCodeInput.value = '';
-  memberCodeInput.placeholder = 'QR code detected...';
+  memberCodeInput.placeholder = 'QR...';
   memberCodeInput.disabled = true;
 
-  // If we have a stored key, try to verify immediately
   if (stored) {
     try {
       const clubKey = await importClubKey(stored.key);
       const result = await decryptMemberData(clubKey, encryptedData);
 
       if (result.valid && result.name) {
-        showVerifyResult('valid', 'VALID MEMBER', result.name, result.index);
+        showVerifyResult('valid', t('valid_member'), result.name, result.index);
       } else {
-        showVerifyResult('invalid', 'INVALID - Could not decrypt QR code');
+        showVerifyResult('invalid', t('invalid_qr'));
       }
     } catch {
-      showVerifyResult('error', 'Error: Invalid club key');
+      showVerifyResult('error', t('error_key'));
     }
   } else {
-    // No stored key - ask user to enter it
-    showVerifyResult('error', 'Please enter the club key and click Verify');
-    memberCodeInput.placeholder = 'QR verification pending...';
-
-    // Store encrypted data for manual verification
+    showVerifyResult('error', t('error_enter_key'));
     memberCodeInput.dataset.qrData = encryptedData;
   }
 }
@@ -471,26 +637,23 @@ function checkVerifyParameter() {
   const verifyData = params.get('verify');
 
   if (verifyData) {
-    // Remove the parameter from URL to allow page refresh
     const newUrl = window.location.pathname;
     window.history.replaceState({}, '', newUrl);
-
     handleQRVerification(verifyData);
   }
 }
 
-// Initialize: check URL parameters and load stored values
+// Initialize
 function init() {
-  // Load stored club key into verify form
+  updateLanguage();
+
   const stored = loadClubKeyFromStorage();
   if (stored) {
     verifyClubKeyInput.value = stored.key;
     verifyClubIdInput.value = stored.clubId;
   }
 
-  // Check for QR verification parameter
   checkVerifyParameter();
 }
 
-// Run init when DOM is ready
 init();

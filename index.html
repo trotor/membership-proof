@@ -43,6 +43,26 @@
       margin-bottom: 2rem;
     }
 
+    .lang-switch {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+    }
+
+    .lang-btn {
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .lang-btn:hover {
+      border-color: var(--primary);
+    }
+
     h1 {
       font-size: 1.75rem;
       font-weight: 700;
@@ -112,7 +132,7 @@
 
     input[type="text"],
     input[type="password"],
-    input[type="date"],
+    input[type="number"],
     input[type="file"],
     textarea {
       width: 100%;
@@ -394,7 +414,6 @@
       color: var(--text-muted);
     }
 
-    /* QR Verification result */
     .result.valid .member-name {
       font-size: 1.5rem;
       margin-top: 0.25rem;
@@ -403,6 +422,11 @@
     .result.valid .member-index {
       font-size: 0.9rem;
       opacity: 0.8;
+    }
+
+    /* Conditional inputs based on code system */
+    #simple-inputs, #qr-inputs {
+      transition: all 0.2s;
     }
 
     @media (max-width: 480px) {
@@ -421,12 +445,18 @@
       .qr-grid {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
       }
+
+      .lang-switch {
+        position: static;
+        text-align: right;
+        margin-bottom: 1rem;
+      }
     }
 
     @media print {
       .tabs, header, .privacy-note, footer,
       .form-group, .btn-primary, .output-header button,
-      #club-key-output, .hint {
+      #club-key-output, .hint, .lang-switch {
         display: none !important;
       }
 
@@ -448,102 +478,119 @@
 </head>
 <body>
   <div class="container">
+    <div class="lang-switch">
+      <button class="lang-btn" id="lang-toggle">Suomeksi</button>
+    </div>
+
     <header>
-      <h1>Membership Proof</h1>
-      <p class="subtitle">Privacy-preserving membership verification</p>
+      <h1 data-i18n="title">Membership Proof</h1>
+      <p class="subtitle" data-i18n="subtitle">Privacy-preserving membership verification</p>
     </header>
 
     <div class="tabs">
-      <button class="tab active" id="tab-generate">Generate Codes</button>
-      <button class="tab" id="tab-verify">Verify Member</button>
+      <button class="tab active" id="tab-generate" data-i18n="tab_generate">Generate Codes</button>
+      <button class="tab" id="tab-verify" data-i18n="tab_verify">Verify Member</button>
     </div>
 
     <!-- Generate Section -->
     <section id="generate-section" class="card">
       <div class="form-group">
-        <label>Member List (CSV)</label>
-        <div class="drop-zone" id="drop-zone">
-          <div class="drop-zone-icon">📄</div>
-          <p class="drop-zone-text">
-            Drag & drop CSV file here<br>
-            or <strong>click to browse</strong>
-          </p>
-          <p class="drop-zone-filename" id="file-name"></p>
-          <input type="file" id="csv-file" accept=".csv,.txt">
-        </div>
-        <p class="hint">Data is processed locally and never stored.</p>
-      </div>
-
-      <div class="form-group">
-        <label for="club-id">Club ID</label>
-        <input type="text" id="club-id" placeholder="e.g., SWIM-CLUB-2024">
-        <p class="hint">Short identifier for your club (letters, numbers, hyphens)</p>
-      </div>
-
-      <div class="form-group">
-        <label for="admin-password">Admin Password</label>
-        <input type="password" id="admin-password" placeholder="At least 8 characters">
-        <p class="hint">Keep this secret. Same password regenerates the same club key.</p>
-      </div>
-
-      <div class="form-group">
-        <label>Code System</label>
+        <label data-i18n="code_system">Code System</label>
         <div class="code-system-selector">
           <label class="radio-option">
             <input type="radio" name="code-system" value="simple" checked>
             <span class="radio-label">
-              <strong>Simple 6-digit codes</strong>
-              <small>Easy to type, no names shown</small>
+              <strong data-i18n="simple_codes_title">Simple 6-digit codes</strong>
+              <small data-i18n="simple_codes_desc">Easy to remember, just specify how many codes you need</small>
             </span>
           </label>
           <label class="radio-option">
             <input type="radio" name="code-system" value="qr">
             <span class="radio-label">
-              <strong>QR codes with names</strong>
-              <small>Scan to verify, shows member name</small>
+              <strong data-i18n="qr_codes_title">QR codes with names</strong>
+              <small data-i18n="qr_codes_desc">Upload member list, QR reveals name when scanned</small>
             </span>
           </label>
         </div>
       </div>
 
-      <div class="form-group" id="base-url-group" style="display: none;">
-        <label for="base-url">Verification URL Base</label>
-        <input type="text" id="base-url" placeholder="https://username.github.io/membership-proof">
-        <p class="hint">The base URL where your app is hosted</p>
+      <!-- Simple code inputs -->
+      <div id="simple-inputs">
+        <div class="form-group">
+          <label for="code-count" data-i18n="code_count">Number of Codes</label>
+          <input type="number" id="code-count" min="1" max="1000" value="20" placeholder="1-1000">
+          <p class="hint" data-i18n="code_count_hint">How many member codes to generate (max 1000)</p>
+        </div>
       </div>
 
-      <button class="btn-primary" id="generate-btn">Generate Member Codes</button>
+      <!-- QR code inputs -->
+      <div id="qr-inputs" class="hidden">
+        <div class="form-group">
+          <label data-i18n="member_list">Member List (CSV)</label>
+          <div class="drop-zone" id="drop-zone">
+            <div class="drop-zone-icon">📄</div>
+            <p class="drop-zone-text">
+              <span data-i18n="drop_zone_text">Drag & drop CSV file here</span><br>
+              <span data-i18n="drop_zone_or">or</span> <strong data-i18n="drop_zone_browse">click to browse</strong>
+            </p>
+            <p class="drop-zone-filename" id="file-name"></p>
+            <input type="file" id="csv-file" accept=".csv,.txt">
+          </div>
+          <p class="hint" data-i18n="csv_hint">First column should contain surnames. Data is processed locally.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="base-url" data-i18n="base_url">Verification URL Base</label>
+          <input type="text" id="base-url" placeholder="https://username.github.io/membership-proof">
+          <p class="hint" data-i18n="base_url_hint">The URL where your app is hosted (auto-filled)</p>
+        </div>
+      </div>
+
+      <!-- Common inputs -->
+      <div class="form-group">
+        <label for="club-id" data-i18n="club_id">Club ID</label>
+        <input type="text" id="club-id" placeholder="e.g., SWIM-CLUB-2024">
+        <p class="hint" data-i18n="club_id_hint">Short identifier for your club (letters, numbers, hyphens)</p>
+      </div>
+
+      <div class="form-group">
+        <label for="admin-password" data-i18n="admin_password">Admin Password</label>
+        <input type="password" id="admin-password" placeholder="At least 8 characters">
+        <p class="hint" data-i18n="admin_password_hint">Keep this secret. Same password regenerates the same club key.</p>
+      </div>
+
+      <button class="btn-primary" id="generate-btn" data-i18n="generate_btn">Generate Codes</button>
 
       <div id="generate-result" class="hidden" style="margin-top: 1rem;"></div>
 
       <div id="output-section" class="hidden" style="margin-top: 1.5rem;">
         <div class="output-group">
           <div class="output-header">
-            <label for="club-key-output">Club Verification Key</label>
-            <button class="btn-secondary" id="copy-key-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Copy Key</button>
+            <label for="club-key-output" data-i18n="club_key">Club Verification Key</label>
+            <button class="btn-secondary" id="copy-key-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;" data-i18n="copy_key">Copy Key</button>
           </div>
           <textarea id="club-key-output" rows="2" readonly></textarea>
-          <p class="hint">Share this key with verifiers (trainers, officials)</p>
+          <p class="hint" data-i18n="club_key_hint">Share this key with verifiers (trainers, officials)</p>
         </div>
 
         <!-- Simple codes output -->
         <div class="output-group" id="simple-codes-output">
           <div class="output-header">
-            <label for="codes-output">Member Codes</label>
-            <button class="btn-secondary" id="download-codes-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Download CSV</button>
+            <label for="codes-output" data-i18n="member_codes">Member Codes</label>
+            <button class="btn-secondary" id="download-codes-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;" data-i18n="download_csv">Download CSV</button>
           </div>
           <textarea id="codes-output" rows="8" readonly></textarea>
-          <p class="hint">Each member gets one code. Codes contain no personal data.</p>
+          <p class="hint" data-i18n="codes_hint">Give one code to each member. Codes contain no personal data.</p>
         </div>
 
         <!-- QR codes output -->
         <div class="output-group hidden" id="qr-codes-output">
           <div class="output-header">
-            <label>QR Codes</label>
-            <button class="btn-secondary" id="download-qr-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Print All</button>
+            <label data-i18n="qr_codes">QR Codes</label>
+            <button class="btn-secondary" id="download-qr-btn" style="padding: 0.5rem 1rem; font-size: 0.85rem;" data-i18n="print_all">Print All</button>
           </div>
           <div id="qr-grid" class="qr-grid"></div>
-          <p class="hint">Each QR code contains encrypted member name. Share individually with members.</p>
+          <p class="hint" data-i18n="qr_hint">Each QR contains encrypted member name. Send individually to members.</p>
         </div>
       </div>
     </section>
@@ -551,36 +598,34 @@
     <!-- Verify Section -->
     <section id="verify-section" class="card hidden">
       <div class="form-group">
-        <label for="verify-club-key">Club Verification Key</label>
+        <label for="verify-club-key" data-i18n="verify_club_key">Club Verification Key</label>
         <input type="text" id="verify-club-key" placeholder="Paste the club key here">
       </div>
 
       <div class="form-group">
-        <label for="verify-club-id">Club ID</label>
+        <label for="verify-club-id" data-i18n="verify_club_id">Club ID</label>
         <input type="text" id="verify-club-id" placeholder="e.g., SWIM-CLUB-2024">
       </div>
 
       <div class="form-group">
-        <label for="member-code">Member Code</label>
+        <label for="member-code" data-i18n="member_code">Member Code</label>
         <input type="text" id="member-code" placeholder="847291" inputmode="numeric" pattern="[0-9]{6}" maxlength="6">
-        <p class="hint">Enter the 6-digit code</p>
+        <p class="hint" data-i18n="member_code_hint">Enter the 6-digit code</p>
       </div>
 
-      <button class="btn-primary" id="verify-btn">Verify</button>
+      <button class="btn-primary" id="verify-btn" data-i18n="verify_btn">Verify</button>
 
       <div id="verify-result" class="result hidden"></div>
     </section>
 
     <div class="privacy-note">
-      <strong>Privacy by Design</strong>
-      All processing happens in your browser. No data is sent to any server.
-      Member codes contain no personal information - they are cryptographic proofs only.
+      <strong data-i18n="privacy_title">Privacy by Design</strong>
+      <span data-i18n="privacy_text">All processing happens in your browser. No data is sent to any server. Member codes contain no personal information - they are cryptographic proofs only.</span>
     </div>
 
     <footer>
       <p>
         <a href="https://github.com/trotor/membership-proof" target="_blank">GitHub</a>
-        · Tero Rönkkö
       </p>
     </footer>
   </div>
