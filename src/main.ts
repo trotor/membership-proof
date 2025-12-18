@@ -657,8 +657,8 @@ async function handleVerification() {
     return;
   }
 
-  // Check if it's a named code (NAME.123456 format, name can have spaces/hyphens)
-  const isNamedCode = /^[A-Za-z\u00C0-\u017F][A-Za-z\u00C0-\u017F\s\-]*\.\d{6}$/.test(memberCode);
+  // Check if it's a named code (NAME.123456X format, 6 digits + letter suffix)
+  const isNamedCode = /^[A-Za-z\u00C0-\u017F][A-Za-z\u00C0-\u017F\s\-]*\.\d{6}[A-Z]$/i.test(memberCode);
 
   if (isNamedCode) {
     // Named code verification - no club ID needed

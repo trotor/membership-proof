@@ -395,15 +395,16 @@ export async function generateNamedCodesFromCSV(
 
       // Compute signature with index for uniqueness
       const sig = await computeNameSignature(clubKey, surname, count);
-      const code = sig.toString().padStart(6, '0');
+      const numCode = sig.toString().padStart(6, '0');
 
-      // Add number suffix for duplicates (SMITH, SMITH-2, SMITH-3, etc.)
-      const displayName = count === 0 ? surname : `${surname}-${count + 1}`;
+      // Add hidden index as letter suffix (A=first, B=second, etc.)
+      const indexLetter = String.fromCharCode(65 + count); // A, B, C, ...
+      const code = `${numCode}${indexLetter}`;
 
       codes.push({
-        name: displayName,
+        name: surname,
         code,
-        fullCode: `${displayName}.${code}`
+        fullCode: `${surname}.${code}`
       });
     }
   }
@@ -422,25 +423,20 @@ export async function verifyNamedCode(
   input: string,
   clubKey: CryptoKey
 ): Promise<NamedVerificationResult> {
-  // Parse NAME.123456 or NAME-N.123456 format
-  const match = input.match(/^([A-Za-z\u00C0-\u017F][A-Za-z\u00C0-\u017F\s\-0-9]*)\.(\d{6})$/);
+  // Parse NAME.123456X format (6 digits + letter suffix for index)
+  const match = input.match(/^([A-Za-z\u00C0-\u017F][A-Za-z\u00C0-\u017F\s\-]*)\.(\d{6})([A-Za-z])$/);
   if (!match) {
     return { valid: false, reason: 'invalid_format' };
   }
 
-  // Extract surname and index from name (SMITH or SMITH-2)
+  // Extract surname (last word from name)
   const fullName = match[1].toUpperCase().trim();
   const nameParts = fullName.split(/\s+/);
-  let lastPart = nameParts[nameParts.length - 1];
+  const surname = nameParts[nameParts.length - 1];
 
-  // Check for index suffix (SMITH-2, SMITH-3, etc.)
-  let surname = lastPart;
-  let index = 0;
-  const indexMatch = lastPart.match(/^(.+)-(\d+)$/);
-  if (indexMatch) {
-    surname = indexMatch[1];
-    index = parseInt(indexMatch[2], 10) - 1; // Convert to 0-based
-  }
+  // Extract index from letter suffix (A=0, B=1, C=2, ...)
+  const indexLetter = match[3].toUpperCase();
+  const index = indexLetter.charCodeAt(0) - 65; // A=0, B=1, etc.
 
   const providedCode = parseInt(match[2], 10);
 
@@ -451,9 +447,8 @@ export async function verifyNamedCode(
     return { valid: false, reason: 'invalid_code' };
   }
 
-  // Return the display name (SMITH or SMITH-2)
-  const displayName = index === 0 ? surname : `${surname}-${index + 1}`;
-  return { valid: true, name: displayName };
+  // Return just the surname (user doesn't need to know their index)
+  return { valid: true, name: surname };
 }
 
 // QR code result
