@@ -381,14 +381,18 @@ export async function generateNamedCodesFromCSV(
 
   for (let i = startIndex; i < rows.length; i++) {
     if (rows[i].length > 0 && rows[i][0]) {
-      const name = rows[i][0].trim().toUpperCase();
-      const sig = await computeNameSignature(clubKey, name);
+      const fullName = rows[i][0].trim().toUpperCase();
+      // Extract surname (last word) from full name
+      const nameParts = fullName.split(/\s+/);
+      const surname = nameParts[nameParts.length - 1];
+
+      const sig = await computeNameSignature(clubKey, surname);
       const code = sig.toString().padStart(6, '0');
 
       codes.push({
-        name,
+        name: surname,
         code,
-        fullCode: `${name}.${code}`
+        fullCode: `${surname}.${code}`
       });
     }
   }
@@ -413,7 +417,10 @@ export async function verifyNamedCode(
     return { valid: false, reason: 'invalid_format' };
   }
 
-  const name = match[1].toUpperCase();
+  // Extract surname (last word) for verification
+  const fullName = match[1].toUpperCase().trim();
+  const nameParts = fullName.split(/\s+/);
+  const name = nameParts[nameParts.length - 1];
   const providedCode = parseInt(match[2], 10);
 
   // Compute expected code
