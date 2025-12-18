@@ -12,6 +12,7 @@ import {
   verifyNamedCode,
   decryptMemberData,
   parseMemberCode,
+  CODE_SYSTEM_SALT,
   type CodeSystem,
   type NamedCodeResult,
   type QRCodeResult,
@@ -700,7 +701,7 @@ async function handleVerification() {
 
   try {
     const clubKey = await importClubKey(clubKeyStr);
-    const result = await verifyMemberCode(memberCode, clubKey, 'SIMPLE');
+    const result = await verifyMemberCode(memberCode, clubKey, CODE_SYSTEM_SALT);
 
     if (result.valid) {
       saveClubKeyToStorage(clubKeyStr);

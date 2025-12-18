@@ -292,6 +292,10 @@ export function parseCSV(content: string): string[][] {
   });
 }
 
+// Fixed salt for all non-QR code systems
+// This ensures simple codes and named codes share the same club key
+export const CODE_SYSTEM_SALT = 'MEMBERSHIP-CODES-V1';
+
 // Generate unique codes by count (for simple 6-digit system)
 export async function generateCodesByCount(
   count: number,
@@ -301,8 +305,8 @@ export async function generateCodesByCount(
     throw new Error('Count must be between 1 and 1000');
   }
 
-  // Use fixed salt - password alone determines uniqueness
-  const clubKey = await deriveClubKey(adminPassword, 'SIMPLE');
+  // Use shared salt - simple and named codes use same key
+  const clubKey = await deriveClubKey(adminPassword, CODE_SYSTEM_SALT);
   const exportedKey = await exportClubKey(clubKey);
 
   const codes: string[] = [];
@@ -322,8 +326,8 @@ export async function generateCodesByCount(
 
     usedIdentifiers.add(identifier);
 
-    // Compute signature (using 'SIMPLE' as fixed club ID)
-    const sig = await computeSignature(clubKey, 'SIMPLE', identifier);
+    // Compute signature
+    const sig = await computeSignature(clubKey, CODE_SYSTEM_SALT, identifier);
     const code = identifier.toString().padStart(3, '0') + sig.toString().padStart(3, '0');
     codes.push(code);
   }
@@ -367,10 +371,10 @@ export async function generateNamedCodesFromCSV(
 
   // Skip header if present
   const startIndex = rows.length > 0 &&
-    rows[0].some(cell => /^(name|member|id|email|nimi|sukunimi)/i.test(cell)) ? 1 : 0;
+    rows[0].some(cell => /^(name|member|id|email|nimi|sukunimi|surname)/i.test(cell)) ? 1 : 0;
 
-  // Use fixed salt for named codes - password alone determines uniqueness
-  const clubKey = await deriveClubKey(adminPassword, 'NAMED');
+  // Use shared salt - simple and named codes use same key
+  const clubKey = await deriveClubKey(adminPassword, CODE_SYSTEM_SALT);
   const exportedKey = await exportClubKey(clubKey);
 
   const codes: NamedCodeResult[] = [];
