@@ -345,14 +345,16 @@ export interface NamedCodeResult {
   fullCode: string;  // NAME.123456 format
 }
 
-// Compute 6-digit signature for a name (club key already unique per organization)
+// Compute 6-digit signature for a name with index (club key already unique per organization)
 async function computeNameSignature(
   clubKey: CryptoKey,
-  name: string
+  name: string,
+  index: number = 0
 ): Promise<number> {
   const encoder = new TextEncoder();
   const normalizedName = name.toUpperCase().trim();
-  const message = encoder.encode(`NAME|${normalizedName}`);
+  // Include index in signature to make duplicate names unique
+  const message = encoder.encode(`NAME|${normalizedName}|${index}`);
 
   const signature = await crypto.subtle.sign('HMAC', clubKey, message.buffer as ArrayBuffer);
   const view = new DataView(signature);
@@ -378,6 +380,7 @@ export async function generateNamedCodesFromCSV(
   const exportedKey = await exportClubKey(clubKey);
 
   const codes: NamedCodeResult[] = [];
+  const surnameCount: Map<string, number> = new Map();
 
   for (let i = startIndex; i < rows.length; i++) {
     if (rows[i].length > 0 && rows[i][0]) {
@@ -386,13 +389,21 @@ export async function generateNamedCodesFromCSV(
       const nameParts = fullName.split(/\s+/);
       const surname = nameParts[nameParts.length - 1];
 
-      const sig = await computeNameSignature(clubKey, surname);
+      // Track how many times we've seen this surname
+      const count = surnameCount.get(surname) || 0;
+      surnameCount.set(surname, count + 1);
+
+      // Compute signature with index for uniqueness
+      const sig = await computeNameSignature(clubKey, surname, count);
       const code = sig.toString().padStart(6, '0');
 
+      // Add number suffix for duplicates (SMITH, SMITH-2, SMITH-3, etc.)
+      const displayName = count === 0 ? surname : `${surname}-${count + 1}`;
+
       codes.push({
-        name: surname,
+        name: displayName,
         code,
-        fullCode: `${surname}.${code}`
+        fullCode: `${displayName}.${code}`
       });
     }
   }
@@ -411,26 +422,38 @@ export async function verifyNamedCode(
   input: string,
   clubKey: CryptoKey
 ): Promise<NamedVerificationResult> {
-  // Parse NAME.123456 format (name can contain letters, spaces, hyphens)
-  const match = input.match(/^([A-Za-z\u00C0-\u017F][A-Za-z\u00C0-\u017F\s\-]*)\.(\d{6})$/);
+  // Parse NAME.123456 or NAME-N.123456 format
+  const match = input.match(/^([A-Za-z\u00C0-\u017F][A-Za-z\u00C0-\u017F\s\-0-9]*)\.(\d{6})$/);
   if (!match) {
     return { valid: false, reason: 'invalid_format' };
   }
 
-  // Extract surname (last word) for verification
+  // Extract surname and index from name (SMITH or SMITH-2)
   const fullName = match[1].toUpperCase().trim();
   const nameParts = fullName.split(/\s+/);
-  const name = nameParts[nameParts.length - 1];
+  let lastPart = nameParts[nameParts.length - 1];
+
+  // Check for index suffix (SMITH-2, SMITH-3, etc.)
+  let surname = lastPart;
+  let index = 0;
+  const indexMatch = lastPart.match(/^(.+)-(\d+)$/);
+  if (indexMatch) {
+    surname = indexMatch[1];
+    index = parseInt(indexMatch[2], 10) - 1; // Convert to 0-based
+  }
+
   const providedCode = parseInt(match[2], 10);
 
-  // Compute expected code
-  const expectedCode = await computeNameSignature(clubKey, name);
+  // Compute expected code with index
+  const expectedCode = await computeNameSignature(clubKey, surname, index);
 
   if (providedCode !== expectedCode) {
     return { valid: false, reason: 'invalid_code' };
   }
 
-  return { valid: true, name };
+  // Return the display name (SMITH or SMITH-2)
+  const displayName = index === 0 ? surname : `${surname}-${index + 1}`;
+  return { valid: true, name: displayName };
 }
 
 // QR code result
