@@ -272,6 +272,9 @@ function getSelectedCodeSystem(): CodeSystem {
   return 'simple';
 }
 
+// Club ID form group
+const clubIdGroup = clubIdInput.closest('.form-group') as HTMLElement;
+
 codeSystemRadios.forEach(radio => {
   radio.addEventListener('change', () => {
     const system = getSelectedCodeSystem();
@@ -281,10 +284,13 @@ codeSystemRadios.forEach(radio => {
 
     if (system === 'simple') {
       simpleInputs.classList.remove('hidden');
+      clubIdGroup.classList.remove('hidden');
     } else if (system === 'named') {
       namedInputs.classList.remove('hidden');
+      clubIdGroup.classList.add('hidden'); // No club ID needed for named codes
     } else {
       qrInputs.classList.remove('hidden');
+      clubIdGroup.classList.remove('hidden');
       // Auto-fill base URL
       if (!baseUrlInput.value) {
         baseUrlInput.value = window.location.origin + window.location.pathname.replace(/\/$/, '');
@@ -460,10 +466,15 @@ generateBtn.addEventListener('click', async () => {
       generateBtn.textContent = t('generate_btn');
     }
   } else if (codeSystem === 'named') {
-    // Named code generation
+    // Named code generation - no club ID needed
     const file = csvFileNamedInput.files?.[0];
     if (!file) {
       showError(generateResult, t('error_select_csv'));
+      return;
+    }
+
+    if (!adminPassword || adminPassword.length < 8) {
+      showError(generateResult, t('error_password'));
       return;
     }
 
@@ -472,7 +483,7 @@ generateBtn.addEventListener('click', async () => {
 
     try {
       const csvContent = await file.text();
-      const { clubKey, codes } = await generateNamedCodesFromCSV(csvContent, adminPassword, clubId);
+      const { clubKey, codes } = await generateNamedCodesFromCSV(csvContent, adminPassword);
 
       clubKeyOutput.value = clubKey;
       currentNamedCodes = codes;
@@ -649,21 +660,16 @@ async function handleVerification() {
   const isNamedCode = /^[A-Za-z\u00C0-\u017F]+\.\d{6}$/.test(memberCode);
 
   if (isNamedCode) {
-    // Named code verification
-    if (!clubId) {
-      showVerifyResult('error', t('error_enter_club_id'));
-      return;
-    }
-
+    // Named code verification - no club ID needed
     verifyBtn.disabled = true;
     verifyBtn.textContent = t('verifying');
 
     try {
       const clubKey = await importClubKey(clubKeyStr);
-      const result = await verifyNamedCode(memberCode, clubKey, clubId);
+      const result = await verifyNamedCode(memberCode, clubKey);
 
       if (result.valid && result.name) {
-        saveClubKeyToStorage(clubKeyStr, clubId);
+        saveClubKeyToStorage(clubKeyStr, '');
         showVerifyResult('valid', t('valid_member'), result.name);
       } else {
         showVerifyResult('invalid', t('invalid_code'));

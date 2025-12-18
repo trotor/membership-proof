@@ -341,15 +341,14 @@ export interface NamedCodeResult {
   fullCode: string;  // NAME.123456 format
 }
 
-// Compute 6-digit signature for a name
+// Compute 6-digit signature for a name (club key already unique per organization)
 async function computeNameSignature(
   clubKey: CryptoKey,
-  clubId: string,
   name: string
 ): Promise<number> {
   const encoder = new TextEncoder();
   const normalizedName = name.toUpperCase().trim();
-  const message = encoder.encode(`${clubId.toUpperCase()}|NAME|${normalizedName}`);
+  const message = encoder.encode(`NAME|${normalizedName}`);
 
   const signature = await crypto.subtle.sign('HMAC', clubKey, message.buffer as ArrayBuffer);
   const view = new DataView(signature);
@@ -359,11 +358,10 @@ async function computeNameSignature(
   return num % 1000000;
 }
 
-// Generate named codes from CSV
+// Generate named codes from CSV (no club ID needed - password makes key unique)
 export async function generateNamedCodesFromCSV(
   csvContent: string,
-  adminPassword: string,
-  clubId: string
+  adminPassword: string
 ): Promise<{ clubKey: string; codes: NamedCodeResult[] }> {
   const rows = parseCSV(csvContent);
 
@@ -371,7 +369,8 @@ export async function generateNamedCodesFromCSV(
   const startIndex = rows.length > 0 &&
     rows[0].some(cell => /^(name|member|id|email|nimi|sukunimi)/i.test(cell)) ? 1 : 0;
 
-  const clubKey = await deriveClubKey(adminPassword, clubId);
+  // Use fixed salt for named codes - password alone determines uniqueness
+  const clubKey = await deriveClubKey(adminPassword, 'NAMED');
   const exportedKey = await exportClubKey(clubKey);
 
   const codes: NamedCodeResult[] = [];
@@ -379,7 +378,7 @@ export async function generateNamedCodesFromCSV(
   for (let i = startIndex; i < rows.length; i++) {
     if (rows[i].length > 0 && rows[i][0]) {
       const name = rows[i][0].trim().toUpperCase();
-      const sig = await computeNameSignature(clubKey, clubId, name);
+      const sig = await computeNameSignature(clubKey, name);
       const code = sig.toString().padStart(6, '0');
 
       codes.push({
@@ -402,8 +401,7 @@ export interface NamedVerificationResult {
 
 export async function verifyNamedCode(
   input: string,
-  clubKey: CryptoKey,
-  clubId: string
+  clubKey: CryptoKey
 ): Promise<NamedVerificationResult> {
   // Parse NAME.123456 format
   const match = input.match(/^([A-Za-z\u00C0-\u017F]+)\.(\d{6})$/);
@@ -415,7 +413,7 @@ export async function verifyNamedCode(
   const providedCode = parseInt(match[2], 10);
 
   // Compute expected code
-  const expectedCode = await computeNameSignature(clubKey, clubId, name);
+  const expectedCode = await computeNameSignature(clubKey, name);
 
   if (providedCode !== expectedCode) {
     return { valid: false, reason: 'invalid_code' };
