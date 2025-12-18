@@ -407,8 +407,8 @@ export async function verifyNamedCode(
   input: string,
   clubKey: CryptoKey
 ): Promise<NamedVerificationResult> {
-  // Parse NAME.123456 format
-  const match = input.match(/^([A-Za-z\u00C0-\u017F]+)\.(\d{6})$/);
+  // Parse NAME.123456 format (name can contain letters, spaces, hyphens)
+  const match = input.match(/^([A-Za-z\u00C0-\u017F][A-Za-z\u00C0-\u017F\s\-]*)\.(\d{6})$/);
   if (!match) {
     return { valid: false, reason: 'invalid_format' };
   }
