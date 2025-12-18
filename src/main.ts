@@ -19,7 +19,6 @@ import {
 
 // Storage keys
 const STORAGE_CLUB_KEY = 'membership-proof-club-key';
-const STORAGE_CLUB_ID = 'membership-proof-club-id';
 const STORAGE_LANG = 'membership-proof-lang';
 
 // Translations
@@ -236,7 +235,6 @@ let currentNamedCodes: NamedCodeResult[] = [];
 
 // Verify form elements
 const verifyClubKeyInput = document.getElementById('verify-club-key') as HTMLInputElement;
-const verifyClubIdInput = document.getElementById('verify-club-id') as HTMLInputElement;
 const memberCodeInput = document.getElementById('member-code') as HTMLInputElement;
 const verifyBtn = document.getElementById('verify-btn') as HTMLButtonElement;
 const verifyResult = document.getElementById('verify-result') as HTMLElement;
@@ -284,13 +282,13 @@ codeSystemRadios.forEach(radio => {
 
     if (system === 'simple') {
       simpleInputs.classList.remove('hidden');
-      clubIdGroup.classList.remove('hidden');
+      clubIdGroup.classList.add('hidden'); // No club ID needed
     } else if (system === 'named') {
       namedInputs.classList.remove('hidden');
-      clubIdGroup.classList.add('hidden'); // No club ID needed for named codes
+      clubIdGroup.classList.add('hidden'); // No club ID needed
     } else {
       qrInputs.classList.remove('hidden');
-      clubIdGroup.classList.remove('hidden');
+      clubIdGroup.classList.remove('hidden'); // QR needs club name for display
       // Auto-fill base URL
       if (!baseUrlInput.value) {
         baseUrlInput.value = window.location.origin + window.location.pathname.replace(/\/$/, '');
@@ -414,20 +412,23 @@ generateBtn.addEventListener('click', async () => {
   const adminPassword = adminPasswordInput.value;
   const codeSystem = getSelectedCodeSystem();
 
-  // Common validation
-  if (!clubId || clubId.length < 2) {
-    showError(generateResult, t('error_club_id'));
-    return;
-  }
-
-  if (!/^[A-Z0-9-]+$/.test(clubId)) {
-    showError(generateResult, t('error_club_id_format'));
-    return;
-  }
-
+  // Password validation (common to all systems)
   if (!adminPassword || adminPassword.length < 8) {
     showError(generateResult, t('error_password'));
     return;
+  }
+
+  // Club ID validation only for QR codes
+  if (codeSystem === 'qr') {
+    if (!clubId || clubId.length < 2) {
+      showError(generateResult, t('error_club_id'));
+      return;
+    }
+
+    if (!/^[A-Z0-9-]+$/.test(clubId)) {
+      showError(generateResult, t('error_club_id_format'));
+      return;
+    }
   }
 
   if (codeSystem === 'simple') {
@@ -442,7 +443,7 @@ generateBtn.addEventListener('click', async () => {
     generateBtn.textContent = t('generating');
 
     try {
-      const { clubKey, codes } = await generateCodesByCount(count, adminPassword, clubId);
+      const { clubKey, codes } = await generateCodesByCount(count, adminPassword);
 
       clubKeyOutput.value = clubKey;
       codesOutput.value = codes.join('\n');
@@ -618,7 +619,6 @@ downloadQrBtn.addEventListener('click', () => {
 // Verify member code (handles both simple codes and QR data)
 async function handleVerification() {
   const clubKeyStr = verifyClubKeyInput.value.trim();
-  const clubId = verifyClubIdInput.value.trim().toUpperCase();
   const memberCode = memberCodeInput.value.trim();
   const qrData = memberCodeInput.dataset.qrData;
 
@@ -638,7 +638,7 @@ async function handleVerification() {
       const result = await decryptMemberData(clubKey, qrData);
 
       if (result.valid && result.name) {
-        saveClubKeyToStorage(clubKeyStr, clubId);
+        saveClubKeyToStorage(clubKeyStr);
         showVerifyResult('valid', t('valid_member'), result.name, result.index);
 
         delete memberCodeInput.dataset.qrData;
@@ -669,7 +669,7 @@ async function handleVerification() {
       const result = await verifyNamedCode(memberCode, clubKey);
 
       if (result.valid && result.name) {
-        saveClubKeyToStorage(clubKeyStr, '');
+        saveClubKeyToStorage(clubKeyStr);
         showVerifyResult('valid', t('valid_member'), result.name);
       } else {
         showVerifyResult('invalid', t('invalid_code'));
@@ -683,12 +683,7 @@ async function handleVerification() {
     return;
   }
 
-  // Simple 6-digit code verification
-  if (!clubId) {
-    showVerifyResult('error', t('error_enter_club_id'));
-    return;
-  }
-
+  // Simple 6-digit code verification (uses 'SIMPLE' as fixed club ID)
   if (!memberCode) {
     showVerifyResult('error', t('error_enter_code'));
     return;
@@ -705,10 +700,10 @@ async function handleVerification() {
 
   try {
     const clubKey = await importClubKey(clubKeyStr);
-    const result = await verifyMemberCode(memberCode, clubKey, clubId);
+    const result = await verifyMemberCode(memberCode, clubKey, 'SIMPLE');
 
     if (result.valid) {
-      saveClubKeyToStorage(clubKeyStr, clubId);
+      saveClubKeyToStorage(clubKeyStr);
       showVerifyResult('valid', t('valid_member'));
     } else {
       showVerifyResult('invalid', t('invalid_code'));
@@ -751,22 +746,20 @@ function showVerifyResult(type: 'valid' | 'invalid' | 'error', message: string, 
 }
 
 // Save club key to localStorage
-function saveClubKeyToStorage(key: string, clubId: string) {
+function saveClubKeyToStorage(key: string) {
   try {
     localStorage.setItem(STORAGE_CLUB_KEY, key);
-    localStorage.setItem(STORAGE_CLUB_ID, clubId);
   } catch {
     // Storage might be unavailable
   }
 }
 
 // Load club key from localStorage
-function loadClubKeyFromStorage(): { key: string; clubId: string } | null {
+function loadClubKeyFromStorage(): string | null {
   try {
     const key = localStorage.getItem(STORAGE_CLUB_KEY);
-    const clubId = localStorage.getItem(STORAGE_CLUB_ID);
-    if (key && clubId) {
-      return { key, clubId };
+    if (key) {
+      return key;
     }
   } catch {
     // Storage might be unavailable
@@ -778,19 +771,18 @@ function loadClubKeyFromStorage(): { key: string; clubId: string } | null {
 async function handleQRVerification(encryptedData: string) {
   tabVerify.click();
 
-  const stored = loadClubKeyFromStorage();
-  if (stored) {
-    verifyClubKeyInput.value = stored.key;
-    verifyClubIdInput.value = stored.clubId;
+  const storedKey = loadClubKeyFromStorage();
+  if (storedKey) {
+    verifyClubKeyInput.value = storedKey;
   }
 
   memberCodeInput.value = '';
   memberCodeInput.placeholder = 'QR...';
   memberCodeInput.disabled = true;
 
-  if (stored) {
+  if (storedKey) {
     try {
-      const clubKey = await importClubKey(stored.key);
+      const clubKey = await importClubKey(storedKey);
       const result = await decryptMemberData(clubKey, encryptedData);
 
       if (result.valid && result.name) {
@@ -823,10 +815,9 @@ function checkVerifyParameter() {
 function init() {
   updateLanguage();
 
-  const stored = loadClubKeyFromStorage();
-  if (stored) {
-    verifyClubKeyInput.value = stored.key;
-    verifyClubIdInput.value = stored.clubId;
+  const storedKey = loadClubKeyFromStorage();
+  if (storedKey) {
+    verifyClubKeyInput.value = storedKey;
   }
 
   checkVerifyParameter();

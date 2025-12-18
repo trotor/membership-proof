@@ -295,14 +295,14 @@ export function parseCSV(content: string): string[][] {
 // Generate unique codes by count (for simple 6-digit system)
 export async function generateCodesByCount(
   count: number,
-  adminPassword: string,
-  clubId: string
+  adminPassword: string
 ): Promise<{ clubKey: string; codes: string[] }> {
   if (count < 1 || count > 1000) {
     throw new Error('Count must be between 1 and 1000');
   }
 
-  const clubKey = await deriveClubKey(adminPassword, clubId);
+  // Use fixed salt - password alone determines uniqueness
+  const clubKey = await deriveClubKey(adminPassword, 'SIMPLE');
   const exportedKey = await exportClubKey(clubKey);
 
   const codes: string[] = [];
@@ -322,8 +322,8 @@ export async function generateCodesByCount(
 
     usedIdentifiers.add(identifier);
 
-    // Compute signature
-    const sig = await computeSignature(clubKey, clubId, identifier);
+    // Compute signature (using 'SIMPLE' as fixed club ID)
+    const sig = await computeSignature(clubKey, 'SIMPLE', identifier);
     const code = identifier.toString().padStart(3, '0') + sig.toString().padStart(3, '0');
     codes.push(code);
   }
